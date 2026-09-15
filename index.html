@@ -70,6 +70,7 @@
         <p>· <span class="highlight">健康数据</span>：身高、体重、年龄、性别（可选，用于个性化营养建议）</p>
         <p>· <span class="highlight">设备与网络信息</span>：用于适配设备、排查故障</p>
         <p>我们承诺：<span class="highlight">不</span>向第三方出售您的信息，<span class="highlight">不</span>用于定向广告。</p>
+        <p>本应用基于 DCloud 5+ 引擎开发，运行期间需收集设备唯一识别码（如 OAID）用于统计分析与故障排查，详见<span class="privacy-link" id="show-full">《隐私政策》</span>。</p>
       </div>
       <div class="privacy-btns">
         <button class="privacy-btn refuse" id="privacy-refuse">不同意并退出</button>
@@ -87,6 +88,12 @@
       // 已同意则隐藏弹窗
       try {
         if (localStorage.getItem(AGREE_KEY) === '1') {
+          mask.classList.add('hidden');
+          return;
+        }
+        // App 端原生隐私弹窗（androidPrivacy.json）已同意时，跳过 HTML 弹窗
+        if (typeof plus !== 'undefined' && plus.runtime && typeof plus.runtime.isAgreePrivacy === 'function' && plus.runtime.isAgreePrivacy()) {
+          localStorage.setItem(AGREE_KEY, '1');
           mask.classList.add('hidden');
           return;
         }
