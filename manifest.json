@@ -1,0 +1,100 @@
+{
+    "@platforms" : [ "android", "iPhone", "iPad" ],
+    "id" : "H5616FCB0",
+    "name" : "健康饮食助手",
+    "version" : {
+        "name" : "1.0.0",
+        "code" : "100"
+    },
+    "description" : "拍照识别 · 智能营养 · 科学塑形",
+    "icons" : {
+        "72" : "res/icon/72x72.png"
+    },
+    "launch_path" : "index.html",
+    "developer" : {
+        "name" : "赵建辉",
+        "email" : "",
+        "url" : ""
+    },
+    "permissions" : {
+        "Cache" : {
+            "description" : "管理应用缓存"
+        },
+        "Camera" : {
+            "description" : "访问摄像头"
+        },
+        "Console" : {
+            "description" : "跟踪调试输出日志"
+        },
+        "Device" : {
+            "description" : "访问设备信息"
+        },
+        "Downloader" : {
+            "description" : "文件下载管理"
+        },
+        "Events" : {
+            "description" : "应用扩展事件"
+        },
+        "File" : {
+            "description" : "访问本地文件系统"
+        },
+        "Gallery" : {
+            "description" : "访问系统相册"
+        },
+        "NativeUI" : {
+            "description" : "原生UI控件"
+        },
+        "Navigator" : {
+            "description" : "浏览器信息"
+        },
+        "Storage" : {
+            "description" : "管理应用本地数据"
+        },
+        "Uploader" : {
+            "description" : "管理文件上传任务"
+        },
+        "XMLHttpRequest" : {
+            "description" : "跨域网络访问"
+        }
+    },
+    "plus" : {
+        "splashscreen" : {
+            "autoclose" : true,
+            "waiting" : false
+        },
+        "popGesture" : "none",
+        "runmode" : "liberate",
+        "statusbar" : {
+            "immersed" : true,
+            "style" : "light",
+            "background" : "#0A7D52"
+        },
+        "distribute" : {
+            "google" : {
+                "packagename" : "com.dengpao522.healthpro",
+                "permissions" : [
+                    "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_WIFI_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\"/>",
+                    "<uses-feature android:name=\"android.hardware.camera\"/>",
+                    "<uses-feature android:name=\"android.hardware.camera.autofocus\"/>"
+                ]
+            },
+            "orientation" : [ "portrait-primary" ],
+            "icons" : {
+                "android" : {
+                    "hdpi" : "res/icon/72x72.png",
+                    "xhdpi" : "res/icon/96x96.png",
+                    "xxhdpi" : "res/icon/144x144.png",
+                    "xxxhdpi" : "res/icon/192x192.png"
+                }
+            },
+            "ios" : {
+                "dSYMs" : false
+            }
+        }
+    },
+    "screenOrientation" : [ "portrait-primary" ]
+}
