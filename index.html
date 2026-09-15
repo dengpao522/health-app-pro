@@ -7,10 +7,120 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>健康管理 Pro</title>
-  <script type="module" crossorigin src="./assets/index-fa7trkWQ.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-WaNiIKo4.css">
+  <style>
+    /* ============ 隐私政策弹窗 ============ */
+    #privacy-mask {
+      position: fixed; inset: 0; z-index: 999999;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    #privacy-mask.hidden { display: none; }
+    .privacy-card {
+      width: 86%; max-width: 420px;
+      background: #fff; border-radius: 14px;
+      overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.25);
+      display: flex; flex-direction: column; max-height: 82vh;
+    }
+    .privacy-title {
+      padding: 18px 20px 6px;
+      font-size: 17px; font-weight: 600; color: #1a1a1a; text-align: center;
+    }
+    .privacy-body {
+      padding: 0 20px;
+      font-size: 13.5px; line-height: 1.7; color: #333;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .privacy-body p { margin: 0 0 10px; }
+    .privacy-body .highlight { color: #0a7d52; font-weight: 600; }
+    .privacy-link {
+      color: #0a7d52; text-decoration: none; cursor: pointer;
+    }
+    .privacy-full {
+      display: none; margin-top: 12px; padding: 12px;
+      background: #f6f8f7; border-radius: 8px;
+      max-height: 40vh; overflow-y: auto;
+      font-size: 12.5px; line-height: 1.7; color: #555;
+    }
+    .privacy-full.show { display: block; }
+    .privacy-full h3 { font-size: 13px; margin: 10px 0 4px; color: #333; }
+    .privacy-btns {
+      display: flex; border-top: 1px solid #eee; margin-top: 8px;
+    }
+    .privacy-btn {
+      flex: 1; padding: 14px 0; border: none; background: none;
+      font-size: 15px; cursor: pointer;
+    }
+    .privacy-btn.refuse { color: #666; border-right: 1px solid #eee; }
+    .privacy-btn.agree { color: #0a7d52; font-weight: 600; }
+  </style>
 </head>
 <body>
   <div id="app"></div>
+
+  <!-- 隐私政策弹窗（强制决策型，遮罩不可关闭） -->
+  <div id="privacy-mask">
+    <div class="privacy-card">
+      <div class="privacy-title">隐私政策</div>
+      <div class="privacy-body" id="privacy-body">
+        <p>感谢您使用「健康管理 Pro」！在您使用本应用前，请仔细阅读并同意<span class="privacy-link" id="show-full">《隐私政策》</span>。</p>
+        <p>我们将在您授权后收集以下信息：</p>
+        <p>· <span class="highlight">账号信息</span>：邮箱/手机号（用于注册登录）</p>
+        <p>· <span class="highlight">相机与相册</span>：仅用于拍摄/选择餐食图片进行营养识别，识别完成后图片不长期保存</p>
+        <p>· <span class="highlight">健康数据</span>：身高、体重、年龄、性别（可选，用于个性化营养建议）</p>
+        <p>· <span class="highlight">设备与网络信息</span>：用于适配设备、排查故障</p>
+        <p>我们承诺：<span class="highlight">不</span>向第三方出售您的信息，<span class="highlight">不</span>用于定向广告。</p>
+      </div>
+      <div class="privacy-btns">
+        <button class="privacy-btn refuse" id="privacy-refuse">不同意并退出</button>
+        <button class="privacy-btn agree" id="privacy-agree">同意并继续</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var AGREE_KEY = 'health_pro_privacy_agreed';
+      var mask = document.getElementById('privacy-mask');
+      var showFull = document.getElementById('show-full');
+
+      // 已同意则隐藏弹窗
+      try {
+        if (localStorage.getItem(AGREE_KEY) === '1') {
+          mask.classList.add('hidden');
+          return;
+        }
+      } catch (e) {}
+
+      // 打开完整隐私政策页面
+      showFull.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (typeof plus !== 'undefined' && plus.webview) {
+          plus.webview.open('privacy.html', 'privacy', {});
+        } else {
+          window.open('privacy.html', '_blank');
+        }
+      });
+
+      // 同意
+      document.getElementById('privacy-agree').addEventListener('click', function () {
+        try { localStorage.setItem(AGREE_KEY, '1'); } catch (e) {}
+        mask.classList.add('hidden');
+      });
+
+      // 拒绝
+      document.getElementById('privacy-refuse').addEventListener('click', function () {
+        // H5+ 环境退出应用
+        if (typeof plus !== 'undefined' && plus.runtime) {
+          plus.runtime.quit();
+        } else {
+          alert('您需要同意隐私政策才能使用本应用。');
+        }
+      });
+    })();
+  </script>
+
+  <script type="module" crossorigin src="./assets/index-fa7trkWQ.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-WaNiIKo4.css">
 </body>
 </html>
