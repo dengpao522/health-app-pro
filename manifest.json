@@ -8,13 +8,19 @@
     },
     "description" : "拍照识别 · 智能营养 · 科学塑形",
     "icons" : {
-        "72" : "res/icon/72x72.png"
+        "36" : "res/icon/72x72.png",
+        "48" : "res/icon/72x72.png",
+        "72" : "res/icon/72x72.png",
+        "96" : "res/icon/96x96.png",
+        "144" : "res/icon/144x144.png",
+        "192" : "res/icon/192x192.png",
+        "512" : "res/icon/512x512.png"
     },
     "launch_path" : "index.html",
     "developer" : {
         "name" : "赵建辉",
-        "email" : "",
-        "url" : ""
+        "email" : "3234199611@qq.com",
+        "url" : "https://github.com/dengpao522"
     },
     "permissions" : {
         "Cache" : {
@@ -72,6 +78,10 @@
         "distribute" : {
             "google" : {
                 "packagename" : "com.dengpao522.healthpro",
+                "keystore" : "zjh-healthpro.jks",
+                "password" : "zjh2026health",
+                "aliasname" : "zjh_healthpro",
+                "aliaspassword" : "zjh2026health",
                 "permissions" : [
                     "<uses-permission android:name=\"android.permission.INTERNET\"/>",
                     "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
