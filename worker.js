@@ -41,7 +41,7 @@ export default {
     const origin = request.headers.get('Origin') || '';
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(origin) });
     if (request.method !== 'POST') return jsonResponse({ error: 'method_not_allowed' }, 405, origin);
-    if (!ALLOWED_ORIGINS.includes(origin)) return jsonResponse({ error: 'origin_forbidden' }, 403, origin);
+    if (origin !== '' && origin !== 'null' && !ALLOWED_ORIGINS.includes(origin)) return jsonResponse({ error: 'origin_forbidden' }, 403, origin);
     if (!env.DASHSCOPE_API_KEY) return jsonResponse({ error: 'server_key_missing' }, 500, origin);
     let image = '';
     try { image = (await request.json()).image || ''; } catch (e) { return jsonResponse({ error: 'bad_request' }, 400, origin); }
