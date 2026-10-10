@@ -11,6 +11,7 @@ const routes = [
   { path: '/home', component: () => import('./pages/home.vue') },
   { path: '/scan', component: () => import('./pages/scan.vue') },
   { path: '/trend', component: () => import('./pages/trend.vue') },
+  { path: '/recipes', component: () => import('./pages/recipes.vue') },
   { path: '/profile', component: () => import('./pages/profile.vue') },
 ]
 

@@ -5,6 +5,31 @@
       <text class="page-sub">最近 {{ days }} 天营养与体重变化</text>
     </view>
 
+    <!-- 每周营养报告：数据+文案全部由本地规则引擎生成，零服务器成本 -->
+    <view class="card report-card">
+      <view class="card-title">📄 每周营养报告</view>
+      <view class="report-summary" v-if="report">
+        <view class="rs-item">
+          <text class="rs-val">{{ report.logged_days }}<text class="rs-unit">/7</text></text>
+          <text class="rs-lbl">记录天数</text>
+        </view>
+        <view class="rs-item">
+          <text class="rs-val">{{ report.avg_calories }}</text>
+          <text class="rs-lbl">日均 kcal</text>
+        </view>
+        <view class="rs-item">
+          <text class="rs-val">{{ report.avg_protein }}</text>
+          <text class="rs-lbl">日均蛋白 g</text>
+        </view>
+      </view>
+      <view class="report-insights" v-if="report && report.insights.length">
+        <view class="insight-item" v-for="(line, i) in report.insights" :key="i">
+          <text class="insight-dot">💡</text>
+          <text class="insight-text">{{ line }}</text>
+        </view>
+      </view>
+    </view>
+
     <view class="card">
       <view class="card-title">🔥 每日热量摄入</view>
       <canvas canvas-id="calChart" design-width="660" design-height="320" class="chart"></canvas>
@@ -36,10 +61,12 @@
 <script>
 import { request } from '../js/request.js';
 export default {
-  data() { return { days: 7, points: [], targetCal: 2000 }; },
+  data() { return { days: 7, points: [], targetCal: 2000, report: null }; },
   onShow() { this.loadData(); },
   methods: {
     async loadData() {
+      // 周报独立拉取：失败不影响图表
+      request({ url: '/api/report/weekly' }).then(r => { this.report = r; }).catch(() => {});
       try {
         const res = await request({ url: '/api/stats/trend', data: { days: this.days } });
         this.points = res.points;
@@ -196,5 +223,17 @@ export default {
 .chart-legend { display: flex; gap: 30rpx; margin-top: 10rpx; flex-wrap: wrap; }
 .legend-item { font-size: 22rpx; color: #666; display: flex; align-items: center; }
 .dot { width: 16rpx; height: 16rpx; border-radius: 50%; display: inline-block; margin-right: 8rpx; }
+
+/* ===== 每周营养报告 ===== */
+.report-card { border: 2rpx solid #FFE0CC; background: linear-gradient(180deg, #FFF9F5, #fff); }
+.report-summary { display: flex; justify-content: space-around; padding: 8rpx 0 20rpx; border-bottom: 1rpx solid #f5f0ec; margin-bottom: 16rpx; }
+.rs-item { text-align: center; }
+.rs-val { display: block; font-size: 40rpx; font-weight: 800; color: #FF6B35; }
+.rs-unit { font-size: 22rpx; font-weight: 400; color: #bbb; }
+.rs-lbl { display: block; font-size: 22rpx; color: #999; margin-top: 4rpx; }
+.report-insights { display: flex; flex-direction: column; gap: 12rpx; }
+.insight-item { display: flex; gap: 12rpx; align-items: flex-start; }
+.insight-dot { font-size: 24rpx; flex-shrink: 0; margin-top: 2rpx; }
+.insight-text { font-size: 24rpx; color: #555; line-height: 1.6; }
 </style>
 

@@ -462,7 +462,7 @@ export function mockRequest(method, url, data) {
     return { water: total, today_total: total };
   }
   
-  // 体重（profile 记录体重）
+  // ============ 体重（profile 记录体重） ============
   if ((url === '/api/weight' || url === '/records/') && method === 'POST') {
     if (!db.weights[uid]) db.weights[uid] = [];
     db.weights[uid].push({ id: Date.now(), date: todayStr(), weight: data.weight, created_at: new Date().toISOString() });
@@ -470,7 +470,175 @@ export function mockRequest(method, url, data) {
     saveDB(db);
     return { message: 'ok' };
   }
-  
+
+  // ============ 常吃食物（按历史记录聚合，降低记录摩擦） ============
+  // 无需单独维护数据：每次请求时从全部餐食历史实时聚合，天然与记录同步
+  if (url === '/api/meals/frequent' && method === 'GET') {
+    const counter = {};
+    (db.meals[uid] || []).forEach(m => {
+      const k = m.food_name;
+      if (!counter[k]) {
+        // 首次见到该食物：记录它的"营养档案"（按当次记录的分量），用于一键补记
+        counter[k] = {
+          food_name: m.food_name, count: 0,
+          serving_size: m.serving_size, serving_unit: m.serving_unit || 'g',
+          calories: m.calories, protein: m.protein, fat: m.fat,
+          carbs: m.carbs, fiber: m.fiber || 0, sodium: m.sodium || 0,
+          confidence: m.confidence || 1,
+          last_meal_type: m.meal_type, last_date: m.date,
+        };
+      }
+      counter[k].count += 1;
+      // 历史按时间正序追加，后遍历到的一定是更新的记录
+      counter[k].last_meal_type = m.meal_type;
+      counter[k].last_date = m.date;
+    });
+    // 按吃过的次数降序，次数相同则最近吃过的靠前，取前 8 个
+    return Object.values(counter)
+      .sort((a, b) => b.count - a.count || (a.last_date < b.last_date ? 1 : -1))
+      .slice(0, 8);
+  }
+
+  // ============ 连续打卡（当天记录过任意饮食即算打卡） ============
+  if (url === '/api/streak' && method === 'GET') {
+    const days = new Set((db.meals[uid] || []).map(m => m.date));
+    const todayLogged = days.has(todayStr());
+    // 今天还没打卡时从昨天起算：连胜不断，激励用户今天补上
+    let streak = 0;
+    let offset = todayLogged ? 0 : 1;
+    while (days.has(dateOffset(offset))) { streak += 1; offset += 1; }
+    return { streak, todayLogged };
+  }
+
+  // ============ 今日健康评分（本地规则引擎，100 分制） ============
+  // 五个维度：热量达成 40 + 蛋白质 20 + 脂肪控制 15 + 饮水 15 + 盐分 10
+  // 未达标的维度会带一句改进建议（tip），前端挑最弱的两三条展示
+  if (url === '/api/health-score' && method === 'GET') {
+    const list = (db.meals[uid] || []).filter(m => m.date === todayStr());
+    const water = (db.waters[uid] || []).filter(w => w.date === todayStr()).reduce((s, w) => s + w.amount, 0);
+    const tg = calcTargets(user);
+    const logged = list.length > 0;
+    const cal = list.reduce((s, m) => s + (m.calories || 0), 0);
+    const p = list.reduce((s, m) => s + (m.protein || 0), 0);
+    const f = list.reduce((s, m) => s + (m.fat || 0), 0);
+    const na = list.reduce((s, m) => s + (m.sodium || 0), 0);
+    const items = [];
+    // 1) 热量达成 40 分：摄入/目标落在 90%~110% 满分，越偏离越低
+    let calScore = 0, calTip = '还没有记录饮食，记一笔才知道吃够没有';
+    if (logged && tg.target_calories > 0) {
+      const ratio = cal / tg.target_calories;
+      if (ratio >= 0.9 && ratio <= 1.1) { calScore = 40; calTip = ''; }
+      else if ((ratio >= 0.75 && ratio < 0.9) || (ratio > 1.1 && ratio <= 1.25)) { calScore = 28; calTip = ratio < 0.9 ? '热量偏低，加一份主食或蛋白质' : '热量略超标，下一餐清淡些'; }
+      else if ((ratio >= 0.5 && ratio < 0.75) || (ratio > 1.25 && ratio <= 1.5)) { calScore = 16; calTip = ratio < 0.75 ? '吃得太少，容易饿到报复性进食' : '超标较多，饭后散散步消耗一下'; }
+      else { calScore = 6; calTip = ratio < 0.5 ? '几乎没吃东西，别亏待自己' : '严重超标，今晚要注意控制'; }
+    }
+    items.push({ key: 'calories', label: '热量达成', score: calScore, max: 40, tip: calTip });
+    // 2) 蛋白质 20 分：达到目标 90% 满分
+    let pScore = 0, pTip = '先记录饮食才能评估蛋白质';
+    if (logged) {
+      if (p >= tg.target_protein * 0.9) { pScore = 20; pTip = ''; }
+      else if (p >= tg.target_protein * 0.7) { pScore = 14; pTip = '蛋白质还差一点，加个蛋或一杯奶'; }
+      else { pScore = 7; pTip = '蛋白质不足，每餐要有掌心大小的瘦肉'; }
+    }
+    items.push({ key: 'protein', label: '蛋白质', score: pScore, max: 20, tip: pTip });
+    // 3) 脂肪控制 15 分：不超过目标满分
+    let fScore = 0, fTip = '先记录饮食才能评估脂肪';
+    if (logged) {
+      if (f <= tg.target_fat) { fScore = 15; fTip = ''; }
+      else if (f <= tg.target_fat * 1.2) { fScore = 9; fTip = '脂肪略多，少吃油炸食品'; }
+      else { fScore = 3; fTip = '脂肪超标，多用蒸煮少用煎炸'; }
+    }
+    items.push({ key: 'fat', label: '脂肪控制', score: fScore, max: 15, tip: fTip });
+    // 4) 盐分 10 分：钠 ≤ 2000mg 满分（膳食指南推荐上限）
+    let naScore = 0, naTip = '先记录饮食才能评估盐分';
+    if (logged) {
+      if (na <= 2000) { naScore = 10; naTip = ''; }
+      else if (na <= 2500) { naScore = 6; naTip = '盐分略高，酱料能少则少'; }
+      else { naScore = 2; naTip = '钠超标，小心水肿，多喝水'; }
+    }
+    items.push({ key: 'sodium', label: '盐分', score: naScore, max: 10, tip: naTip });
+    // 5) 饮水 15 分：达到目标满分
+    let wScore = 0, wTip = '今天还没喝水，来一杯';
+    if (water >= tg.target_water) { wScore = 15; wTip = ''; }
+    else if (water >= tg.target_water * 0.6) { wScore = 9; wTip = '饮水快达标了，再喝一两杯'; }
+    else if (water > 0) { wScore = 4; wTip = '喝水太少啦，少量多次更好'; }
+    items.push({ key: 'water', label: '饮水', score: wScore, max: 15, tip: wTip });
+    const score = items.reduce((s, it) => s + it.score, 0);
+    const grade = score >= 85 ? '优秀' : score >= 70 ? '良好' : score >= 50 ? '加油' : '待改善';
+    return { score, grade, logged, items };
+  }
+
+  // ============ 每周营养报告（洞察文案由规则引擎本地生成） ============
+  if (url === '/api/report/weekly' && method === 'GET') {
+    const days = last7Days();
+    const tg = calcTargets(user);
+    const weightMap = {};
+    (db.weights[uid] || []).forEach(w => { weightMap[w.date] = w.weight; });
+    // 逐日聚合：是否记录 / 热量 / 蛋白质 / 钠 / 体重
+    const perDay = days.map(d => {
+      const list = (db.meals[uid] || []).filter(m => m.date === d);
+      return {
+        date: d, logged: list.length > 0,
+        calories: list.reduce((s, m) => s + (m.calories || 0), 0),
+        protein: list.reduce((s, m) => s + (m.protein || 0), 0),
+        sodium: list.reduce((s, m) => s + (m.sodium || 0), 0),
+        weight: weightMap[d] || null,
+      };
+    });
+    const loggedArr = perDay.filter(d => d.logged);
+    const avg = key => loggedArr.length ? loggedArr.reduce((s, x) => s + x[key], 0) / loggedArr.length : 0;
+    const avgCal = Math.round(avg('calories'));
+    const avgPro = Math.round(avg('protein'));
+    const sodiumOverDays = loggedArr.filter(d => d.sodium > 2000).length;
+    // 体重变化：取最近两次记录的差值
+    const ws = (db.weights[uid] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    const weightChange = ws.length >= 2 ? +(ws[ws.length - 1].weight - ws[0].weight).toFixed(1) : null;
+    // ---- 洞察规则引擎：按优先级生成人话报告 ----
+    const insights = [];
+    if (loggedArr.length === 0) {
+      insights.push('本周还没有记录，从下一餐开始记录，报告就会有内容啦');
+    } else {
+      // 记录坚持度
+      if (loggedArr.length >= 6) insights.push(`本周记录了 ${loggedArr.length} 天，坚持得很好，继续保持`);
+      else if (loggedArr.length >= 3) insights.push(`本周记录了 ${loggedArr.length} 天，再坚持几天习惯就更牢固了`);
+      else insights.push(`本周只记录了 ${loggedArr.length} 天，记录越全，分析越准`);
+      // 热量 vs 目标
+      if (tg.target_calories > 0) {
+        const ratio = avgCal / tg.target_calories;
+        if (ratio >= 0.9 && ratio <= 1.1) insights.push(`日均摄入 ${avgCal} kcal，正好贴合目标 ${tg.target_calories} kcal，火候恰到好处`);
+        else if (ratio < 0.9) insights.push(`日均摄入 ${avgCal} kcal，低于目标 ${tg.target_calories} kcal，吃太少容易掉代谢，别亏待自己`);
+        else insights.push(`日均摄入 ${avgCal} kcal，高于目标 ${tg.target_calories} kcal，可以把主食分量减掉五分之一试试`);
+      }
+      // 蛋白质
+      if (avgPro < tg.target_protein * 0.8) insights.push(`蛋白质日均 ${avgPro} g，低于目标 ${tg.target_protein} g，每餐加一份蛋/奶/瘦肉`);
+      else insights.push(`蛋白质日均 ${avgPro} g，达标，肌肉合成有原料了`);
+      // 钠
+      if (sodiumOverDays >= 4) insights.push(`有 ${sodiumOverDays} 天钠摄入超过 2000mg，重口味是水肿和血压的元凶，试试少放半勺盐`);
+      else if (sodiumOverDays >= 1) insights.push(`有 ${sodiumOverDays} 天钠略超标，问题不大，酱料能少则少`);
+      // 体重方向与目标的一致性
+      if (weightChange !== null && weightChange !== 0) {
+        const txt = weightChange < 0 ? `体重下降 ${Math.abs(weightChange)} kg` : `体重上升 ${weightChange} kg`;
+        // 三分支：减脂看降、增肌看涨、维持只陈述事实不做方向评判
+        if (user.goal === 'lose') {
+          insights.push(weightChange < 0 ? `${txt}，方向和减脂目标一致，干得漂亮` : `${txt}，和减脂目标相反，注意调整热量`);
+        } else if (user.goal === 'gain') {
+          insights.push(weightChange > 0 ? `${txt}，方向和增肌目标一致，干得漂亮` : `${txt}，和增肌目标相反，注意多吃多练`);
+        } else {
+          insights.push(`${txt}，维持期体重有小波动很正常，关注长期趋势即可`);
+        }
+      }
+    }
+    return {
+      start: days[0], end: days[6],
+      logged_days: loggedArr.length,
+      avg_calories: avgCal, target_calories: tg.target_calories,
+      avg_protein: avgPro, target_protein: tg.target_protein,
+      sodium_over_days: sodiumOverDays,
+      weight_change: weightChange,
+      insights,
+    };
+  }
+
   return { __status: 404, detail: 'Not found' };
 }
 

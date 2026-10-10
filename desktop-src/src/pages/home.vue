@@ -51,6 +51,48 @@
       </view>
     </view>
 
+    <!-- 健康评分 + 连续打卡（本地规则引擎计算，无网络开销） -->
+    <view class="card score-card">
+      <view class="score-left">
+        <view class="score-ring" :style="{ borderColor: scoreColor }">
+          <text class="score-num" :style="{ color: scoreColor }">{{ score.score }}</text>
+          <text class="score-max">/100</text>
+        </view>
+        <view class="score-info">
+          <text class="score-grade" :style="{ background: scoreColor }">{{ score.grade }}</text>
+          <text class="score-streak" v-if="streak.todayLogged">🔥 连续打卡 {{ streak.streak }} 天</text>
+          <text class="score-streak off" v-else>🔥 已连 {{ streak.streak }} 天 · 今日未打卡</text>
+        </view>
+      </view>
+      <view class="score-tips">
+        <text class="score-tip" v-for="(t, i) in scoreTips" :key="i">· {{ t }}</text>
+        <text class="score-tip ok" v-if="!scoreTips.length && score.logged">· 各项都很棒，保持！</text>
+      </view>
+    </view>
+
+    <!-- 常吃食物一键记录：点击直接记入当前时段餐次 -->
+    <view class="card frequent-card" v-if="frequent.length">
+      <view class="card-title">⚡ 常吃 · 一键记录</view>
+      <scroll-view scroll-x class="frequent-scroll">
+        <view class="frequent-item" v-for="f in frequent" :key="f.food_name" @click="quickAdd(f)">
+          <text class="f-name">{{ f.food_name }}</text>
+          <text class="f-cal">{{ Math.round(f.calories) }} kcal</text>
+          <text class="f-count">吃过 {{ f.count }} 次</text>
+        </view>
+      </scroll-view>
+      <text class="f-hint">点击直接记入{{ activeTypeName }}，记错可在下方列表删除</text>
+    </view>
+
+    <!-- 食谱推荐入口 -->
+    <view class="card recipe-entry" @click="toRecipes">
+      <text class="re-icon">🥗</text>
+      <view class="re-info">
+        <text class="re-title">今日食谱推荐</text>
+        <text class="re-sub">不知道吃什么？按你的目标搭配好了</text>
+      </view>
+      <text class="re-arrow">›</text>
+    </view>
+
     <!-- 餐次 -->
     <view class="card meal-card">
       <view class="card-title">今日饮食</view>
@@ -110,6 +152,11 @@ export default {
       ],
       summary: { calories: 0, protein: 0, fat: 0, carbs: 0, water: 0, meals: [] },
       target: { calories: 2000, protein: 120, fat: 60, carbs: 260, water: 2000 },
+      // 健康评分（{score, grade, logged, items}）与连续打卡（{streak, todayLogged}）
+      score: { score: 0, grade: '—', logged: false, items: [] },
+      streak: { streak: 0, todayLogged: false },
+      // 常吃食物列表（按历史频次聚合的前 8 名）
+      frequent: [],
     };
   },
   computed: {
@@ -130,6 +177,22 @@ export default {
     },
     filteredMeals() {
       return (this.summary.meals || []).filter(m => m.meal_type === this.activeType);
+    },
+    // 从评分明细里挑出最弱的 2 条建议（按得分率升序 = 最短板优先）
+    scoreTips() {
+      return this.score.items
+        .filter(it => it.tip)
+        .sort((a, b) => (a.score / a.max) - (b.score / b.max))
+        .slice(0, 2)
+        .map(it => `${it.label}：${it.tip}`);
+    },
+    // 评分环颜色按等级渐变：绿(优秀) → 黄(良好) → 橙(加油) → 红(待改善)
+    scoreColor() {
+      const s = this.score.score;
+      if (s >= 85) return '#4ECDC4';
+      if (s >= 70) return '#FFB020';
+      if (s >= 50) return '#FF8F5E';
+      return '#FF4D4F';
     }
   },
   onShow() {
@@ -155,6 +218,10 @@ export default {
         this.target = s.target;
         this.drawRing();
       } catch (e) { console.error(e); }
+      // 三个新数据源并行拉取，互不阻塞（失败不影响主数据展示）
+      request({ url: '/api/health-score' }).then(r => { this.score = r; }).catch(() => {});
+      request({ url: '/api/streak' }).then(r => { this.streak = r; }).catch(() => {});
+      request({ url: '/api/meals/frequent' }).then(r => { this.frequent = r || []; }).catch(() => {});
     },
     drawRing() {
       const ctx = uni.createCanvasContext('calorieRing', this);
@@ -196,6 +263,28 @@ export default {
         }
       });
     },
+    // 常吃食物一键记录：沿用该食物上次记录的营养档案，直接入当前时段餐次
+    quickAdd(f) {
+      const mealType = this.activeType;
+      const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
+      request({
+        url: '/api/meals', method: 'POST',
+        data: {
+          food_name: f.food_name, meal_type: mealType,
+          serving_size: f.serving_size, serving_unit: f.serving_unit,
+          calories: f.calories, protein: f.protein, fat: f.fat,
+          carbs: f.carbs, fiber: f.fiber, sodium: f.sodium,
+          confidence: f.confidence,
+        },
+      }).then(() => {
+        uni.showToast({ title: `已记入${mealNames[mealType]}`, icon: 'success' });
+        this.loadData(); // 刷新统计/评分/打卡（常吃频次也会 +1）
+      }).catch(() => {
+        uni.showToast({ title: '记录失败，请重试', icon: 'none' });
+      });
+    },
+    // 跳转食谱推荐页
+    toRecipes() { uni.navigateTo({ url: '/pages/recipes/recipes' }); },
     toScan() { uni.switchTab({ url: '/pages/scan/scan' }); },
     toProfile() { uni.switchTab({ url: '/pages/profile/profile' }); }
   }
@@ -269,4 +358,38 @@ export default {
 .fab { position: fixed; bottom: 40rpx; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #FF6B35, #FF8F5E); color: #fff; padding: 24rpx 56rpx; border-radius: 60rpx; display: flex; align-items: center; box-shadow: 0 10rpx 30rpx rgba(255,107,53,0.4); z-index: 999; }
 .fab-icon { font-size: 40rpx; margin-right: 12rpx; }
 .fab-text { font-size: 30rpx; font-weight: 700; }
+
+/* ===== 健康评分 + 打卡卡 ===== */
+.score-card { display: flex; gap: 24rpx; align-items: flex-start; }
+.score-left { display: flex; align-items: center; gap: 20rpx; flex-shrink: 0; }
+/* 评分环：双圈圆环，颜色随等级变化（JS 绑定 borderColor） */
+.score-ring { width: 110rpx; height: 110rpx; border-radius: 50%; border: 10rpx solid #4ECDC4; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fafafa; }
+.score-num { font-size: 36rpx; font-weight: 800; line-height: 1; }
+.score-max { font-size: 16rpx; color: #bbb; }
+.score-info { display: flex; flex-direction: column; gap: 8rpx; }
+.score-grade { color: #fff; font-size: 20rpx; font-weight: 700; padding: 4rpx 16rpx; border-radius: 20rpx; align-self: flex-start; }
+.score-streak { font-size: 24rpx; color: #FF6B35; font-weight: 600; }
+.score-streak.off { color: #999; font-weight: 400; }
+/* 右侧建议区：最短板优先，最多两条 */
+.score-tips { flex: 1; display: flex; flex-direction: column; gap: 8rpx; justify-content: center; }
+.score-tip { font-size: 22rpx; color: #8a6a1f; background: #FFF8E8; padding: 8rpx 16rpx; border-radius: 12rpx; line-height: 1.5; }
+.score-tip.ok { color: #1f8a70; background: #E8FFF8; }
+
+/* ===== 常吃食物一键记录 ===== */
+.frequent-scroll { white-space: nowrap; }
+.frequent-item { display: inline-flex; flex-direction: column; align-items: center; background: #FFF6F2; border: 2rpx solid #FFE0CC; border-radius: 20rpx; padding: 20rpx 26rpx; margin-right: 16rpx; cursor: pointer; }
+.frequent-item:active { background: #FFE8DD; }
+.f-name { font-size: 26rpx; font-weight: 600; color: #333; }
+.f-cal { font-size: 22rpx; color: #FF6B35; font-weight: 700; margin-top: 6rpx; }
+.f-count { font-size: 18rpx; color: #bbb; margin-top: 4rpx; }
+.f-hint { display: block; font-size: 20rpx; color: #bbb; margin-top: 16rpx; }
+
+/* ===== 食谱推荐入口 ===== */
+.recipe-entry { display: flex; align-items: center; cursor: pointer; }
+.recipe-entry:active { background: #FFF9F5; }
+.re-icon { font-size: 52rpx; margin-right: 20rpx; }
+.re-info { flex: 1; }
+.re-title { display: block; font-size: 28rpx; font-weight: 700; color: #333; }
+.re-sub { display: block; font-size: 22rpx; color: #999; margin-top: 4rpx; }
+.re-arrow { font-size: 44rpx; color: #ccc; }
 </style>
