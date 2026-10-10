@@ -1,6 +1,9 @@
 // 华为云函数（FunctionGraph）- 健康饮食助手 AI 识别服务
-// 运行时：Node.js 16+，触发器：内置 HTTP 触发器（支持 SSE 流式）
+// 函数类型：HTTP函数（监听 8000 端口，支持 SSE 流式）
+// 运行时：Node.js 18.15（内置 fetch）
 // 环境变量：DASHSCOPE_API_KEY（必填）、QWEN_MODEL（可选，默认 qwen-vl-plus）
+
+const http = require('http');
 
 const ALLOWED_ORIGINS = [
   'https://dengpao522.github.io',
@@ -12,7 +15,7 @@ const QWEN_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/complet
 const SYSTEM_PROMPT = '你是一名专业营养师。识别图片中的所有食物（逐项列出，包括主食、菜肴、水果、饮品、零食等），并依据《中国食物成分表》估算每100克（饮品按每100毫升）的营养数据，以及图片中该食物的总重量。只返回一个 JSON 数组，不要输出 markdown 代码块、不要输出任何解释文字。数组每个元素包含字段：name(具体的中文食物名)、category(只能是:主食/肉蛋/蔬菜/水果/饮品/快餐/其他)、confidence(0到1)、calories(每100g热量kcal)、protein、fat、carbs、fiber(克)、sodium(毫克)、serving_hint(常见一份描述)、suggested_serving(数字:图中该食物估算总克重)。如果图片里没有任何食物，返回 []。';
 
 function corsHeaders(origin) {
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : (origin === 'null' ? 'null' : ALLOWED_ORIGINS[0]);
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -47,7 +50,7 @@ function sendSSE(res, obj) {
   res.write(`data: ${JSON.stringify(obj)}\n\n`);
 }
 
-exports.handler = async (req, res) => {
+const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin || '';
   const cors = corsHeaders(origin);
 
@@ -162,4 +165,7 @@ exports.handler = async (req, res) => {
     sendSSE(res, { type: 'error', code: 'upstream_network', status: 502 });
     res.end();
   }
-};
+});
+
+server.listen(8000, '127.0.0.1');
+console.log('Health AI service running on port 8000');
