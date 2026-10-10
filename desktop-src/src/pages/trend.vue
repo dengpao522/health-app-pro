@@ -13,11 +13,11 @@
           <text class="rs-val">{{ report.logged_days }}<text class="rs-unit">/7</text></text>
           <text class="rs-lbl">记录天数</text>
         </view>
-        <view class="rs-item">
+        <view class="rs-item highlight-o">
           <text class="rs-val">{{ report.avg_calories }}</text>
           <text class="rs-lbl">日均 kcal</text>
         </view>
-        <view class="rs-item">
+        <view class="rs-item highlight-p">
           <text class="rs-val">{{ report.avg_protein }}</text>
           <text class="rs-lbl">日均蛋白 g</text>
         </view>
@@ -225,10 +225,13 @@ export default {
 .dot { width: 16rpx; height: 16rpx; border-radius: 50%; display: inline-block; margin-right: 8rpx; }
 
 /* ===== 每周营养报告 ===== */
-.report-card { border: 2rpx solid #FFE0CC; background: linear-gradient(180deg, #FFF9F5, #fff); }
-.report-summary { display: flex; justify-content: space-around; padding: 8rpx 0 20rpx; border-bottom: 1rpx solid #f5f0ec; margin-bottom: 16rpx; }
-.rs-item { text-align: center; }
+.report-card { border: none; background: linear-gradient(180deg, #FFF6F0, #fff 70%); box-shadow: 0 4rpx 20rpx rgba(255,107,53,0.08); }
+.report-summary { display: flex; justify-content: space-around; padding: 12rpx 0 20rpx; margin-bottom: 16rpx; }
+.rs-item { text-align: center; background: #fff; border-radius: 18rpx; padding: 16rpx 26rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05); }
+.rs-item.highlight-o { background: linear-gradient(135deg, #FFF3ED, #FFE8DB); }
+.rs-item.highlight-p { background: linear-gradient(135deg, #E8FBF0, #D6F5E3); }
 .rs-val { display: block; font-size: 40rpx; font-weight: 800; color: #FF6B35; }
+.rs-item.highlight-p .rs-val { color: #16A34A; }
 .rs-unit { font-size: 22rpx; font-weight: 400; color: #bbb; }
 .rs-lbl { display: block; font-size: 22rpx; color: #999; margin-top: 4rpx; }
 .report-insights { display: flex; flex-direction: column; gap: 12rpx; }

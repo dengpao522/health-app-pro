@@ -474,13 +474,19 @@ export function mockRequest(method, url, data) {
   // ============ 常吃食物（按历史记录聚合，降低记录摩擦） ============
   // 无需单独维护数据：每次请求时从全部餐食历史实时聚合，天然与记录同步
   if (url === '/api/meals/frequent' && method === 'GET') {
+    // 分类 → 图标映射：让常吃卡片有彩色 emoji 视觉锚点
+    const CAT_EMOJI = { '主食': '🍚', '肉蛋': '🥩', '蔬菜': '🥬', '水果': '🍎', '饮品': '🥛', '快餐': '🍔', '其他': '🍽️' };
+    const byName = Object.fromEntries(FOOD_DB.map(f => [f.name, f]));
     const counter = {};
     (db.meals[uid] || []).forEach(m => {
       const k = m.food_name;
       if (!counter[k]) {
         // 首次见到该食物：记录它的"营养档案"（按当次记录的分量），用于一键补记
+        const ref = byName[k];
         counter[k] = {
           food_name: m.food_name, count: 0,
+          cat: ref ? ref.cat : '其他',
+          emoji: ref ? (CAT_EMOJI[ref.cat] || '🍽️') : '🍽️',
           serving_size: m.serving_size, serving_unit: m.serving_unit || 'g',
           calories: m.calories, protein: m.protein, fat: m.fat,
           carbs: m.carbs, fiber: m.fiber || 0, sodium: m.sodium || 0,

@@ -113,7 +113,7 @@ export default {
 .meal-tab { flex: 1; text-align: center; padding: 18rpx 0; border-radius: 40rpx; background: #fff; color: #666; font-size: 28rpx; font-weight: 600; cursor: pointer; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.04); }
 .meal-tab.active { background: #FF6B35; color: #fff; }
 
-.recipe-card { background: #fff; border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; }
+.recipe-card { background: #fff; border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); border-left: 8rpx solid #FF8F5E; }
 .rc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
 .rc-name { font-size: 32rpx; font-weight: 700; color: #333; }
 .rc-tags { display: flex; gap: 8rpx; }
