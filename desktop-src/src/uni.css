@@ -1,0 +1,29 @@
+/* uni.scss 变量在桌面版未使用，样式直接写在各页面中 */
+
+/* Vue 模板编译器会把 view/text 等单个小写词标签当作浏览器原生自定义元素输出，
+   全局注册的同名 polyfill 组件在编译期不会生效。未知元素默认 display:inline，
+   会导致卡片塌缩、内容错位重叠，这里补齐各标签应有的默认盒模型。 */
+view {
+  display: block;
+}
+scroll-view {
+  display: block;
+  overflow-y: auto;
+}
+text {
+  display: inline;
+}
+image {
+  display: inline-block;
+}
+picker {
+  display: inline-block;
+}
+/* block 是逻辑分组，不应产生盒子 */
+block {
+  display: contents;
+}
+/* 去掉 canvas 作为行内替换元素的基线缝隙 */
+canvas {
+  display: block;
+}

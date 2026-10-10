@@ -2,6 +2,10 @@
 unpackage/
 res/
 
+# 前端源码工程的本地依赖与构建输出（desktop-src/ 为 Vue3+Vite 源码，见 build.ps1）
+desktop-src/node_modules/
+desktop-src/web_dist/
+
 # 安卓签名证书（绝对不能提交到公开仓库！）
 *.jks
 *.keystore

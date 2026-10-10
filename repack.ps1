@@ -3,9 +3,9 @@
 # 前提：DCloud 云打包免费次数未用完（每日额度），账号已登录 HBuilderX
 
 $ErrorActionPreference = "Stop"
-$project = "c:\Users\32341\Desktop\health-app-pro"
+$project = "e:\Health APP\health-app-pro"
 $cli = "D:\HBuilderX\cli.exe"
-$desktopApk = "C:\Users\32341\Desktop\健康饮食助手.apk"
+$desktopApk = "e:\Health APP\健康饮食助手.apk"
 
 Write-Host "=== 开始云打包（Android 正式包 / 安心打包）===" -ForegroundColor Cyan
 
