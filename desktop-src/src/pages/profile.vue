@@ -56,6 +56,23 @@
         </picker>
       </view>
       <button class="save-btn" @click="saveProfile">保存并重算目标</button>
+      <!-- 自定义热量目标：开启后覆盖公式计算的热量（蛋白/脂肪/碳水仍按身体数据推算） -->
+      <view class="custom-cal">
+        <view class="cc-head">
+          <text class="cc-title">🎯 自定义热量目标</text>
+          <view class="cc-switch" :class="{ on: useCustomCal }" @click="toggleCustomCal">
+            <view class="cc-knob"></view>
+          </view>
+        </view>
+        <view class="cc-body" v-if="useCustomCal">
+          <view class="cc-stepper">
+            <view class="cc-step" @click="adjustCal(-100)">−100</view>
+            <input class="cc-input" type="number" :value="customCal" @change="customCal = +$event.target.value" />
+            <view class="cc-step" @click="adjustCal(100)">＋100</view>
+          </view>
+          <text class="cc-hint">范围 800~6000 kcal，开启后立即生效</text>
+        </view>
+      </view>
     </view>
 
     <!-- 记录体重 -->
@@ -95,6 +112,9 @@ export default {
       activityIdx: 1,
       goalIdx: 1,
       weightInput: '',
+      // 自定义热量目标
+      useCustomCal: false,
+      customCal: 2000,
     };
   },
   computed: {
@@ -117,10 +137,36 @@ export default {
     this.activityIdx = ai >= 0 ? ai : 1;
     const gi = GOALS.findIndex(g => g.key === u.goal);
     this.goalIdx = gi >= 0 ? gi : 1;
+    // 恢复自定义热量设置
+    this.useCustomCal = !!(u.custom_calories && u.custom_calories >= 800);
+    this.customCal = u.custom_calories || 2000;
   },
   methods: {
     onActivity(e) { this.activityIdx = +e.detail.value; this.form.activity_level = ACTIVITIES[this.activityIdx].key; },
     onGoal(e) { this.goalIdx = +e.detail.value; this.form.goal = GOALS[this.goalIdx].key; },
+    // ===== 自定义热量 =====
+    toggleCustomCal() {
+      this.useCustomCal = !this.useCustomCal;
+      this.applyCustomCal();
+    },
+    adjustCal(delta) {
+      this.customCal = Math.max(800, Math.min(6000, (this.customCal || 2000) + delta));
+      this.applyCustomCal();
+    },
+    // 防抖提交：开关/步进后 400ms 无操作才写入
+    applyCustomCal() {
+      clearTimeout(this._calTimer);
+      this._calTimer = setTimeout(async () => {
+        const value = this.useCustomCal ? Math.max(800, Math.min(6000, +this.customCal || 2000)) : null;
+        try {
+          const res = await request({ url: '/api/me', method: 'PUT', data: { custom_calories: value } });
+          const info = uni.getStorageSync('userInfo');
+          info.user = res;
+          uni.setStorageSync('userInfo', info);
+          this.user = res;
+        } catch (e) {}
+      }, 400);
+    },
     async saveProfile() {
       const h = +this.form.height, w = +this.form.weight, a = +this.form.age;
       if (!h || h < 80 || h > 250) { uni.showToast({ title: '身高请填 80~250cm', icon: 'none' }); return; }
@@ -218,5 +264,21 @@ export default {
 .logout-btn { margin: 30rpx 24rpx; background: #fff; color: #FF4D4F; border: none; border-radius: 16rpx; height: 88rpx; line-height: 88rpx; font-size: 30rpx; }
 /* 注销按钮：与退出登录区分的更深警示色 */
 .logout-btn.delete-btn { color: #d9363e; font-weight: 600; }
+
+/* ===== 自定义热量目标 ===== */
+.custom-cal { margin-top: 26rpx; padding-top: 26rpx; border-top: 1rpx solid #F4F5F7; }
+.cc-head { display: flex; align-items: center; justify-content: space-between; }
+.cc-title { font-size: 27rpx; font-weight: 700; color: #333; }
+/* 开关：iOS 风胶囊 */
+.cc-switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background: #E5E7EB; position: relative; transition: background .25s; cursor: pointer; }
+.cc-switch.on { background: #FF6B35; }
+.cc-knob { position: absolute; top: 4rpx; left: 4rpx; width: 40rpx; height: 40rpx; border-radius: 50%; background: #fff; transition: left .25s; box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.2); }
+.cc-switch.on .cc-knob { left: 40rpx; }
+.cc-body { margin-top: 22rpx; }
+.cc-stepper { display: flex; align-items: center; gap: 14rpx; }
+.cc-step { padding: 14rpx 24rpx; background: #F4F5F7; border-radius: 14rpx; font-size: 26rpx; font-weight: 700; color: #333; cursor: pointer; }
+.cc-step:active { background: #FFE8DD; color: #FF6B35; }
+.cc-input { flex: 1; height: 72rpx; text-align: center; font-size: 34rpx; font-weight: 800; color: #FF6B35; background: #FFF6F2; border-radius: 14rpx; }
+.cc-hint { display: block; font-size: 20rpx; color: #bbb; margin-top: 14rpx; }
 </style>
 

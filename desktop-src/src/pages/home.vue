@@ -127,12 +127,13 @@
         </view>
         <view v-for="m in filteredMeals" :key="m.id" class="meal-item">
           <view class="m-dot">•</view>
-          <view class="m-info">
+          <view class="m-info" @click="openEdit(m)">
             <text class="m-name">{{ m.food_name }}</text>
             <text class="m-meta">{{ m.serving_size }}{{ m.serving_unit || 'g' }} · 蛋白{{ m.protein }} 脂肪{{ m.fat }} 碳水{{ m.carbs }}</text>
           </view>
           <view class="m-right">
             <text class="m-cal">{{ m.calories }}</text>
+            <view class="m-edit" @click="openEdit(m)">✎</view>
             <view class="m-del" @click="delMeal(m)">✕</view>
           </view>
         </view>
@@ -140,6 +141,35 @@
     </view>
 
     <view style="height: 150rpx;"></view>
+
+    <!-- 编辑记录弹窗：改分量（营养等比重算）+ 改餐次 -->
+    <view class="edit-mask" v-if="editing" @click.self="editing = null">
+      <view class="edit-dialog">
+        <text class="ed-title">编辑记录</text>
+        <text class="ed-name">{{ editing.food_name }}</text>
+        <view class="ed-row">
+          <text class="ed-lbl">分量({{ editing.serving_unit || 'g' }})</text>
+          <view class="ed-stepper">
+            <view class="ed-step" @click="adjustServing(-50)">−</view>
+            <input class="ed-input" type="number" :value="editServing" @change="editServing = +$event.target.value" />
+            <view class="ed-step" @click="adjustServing(50)">＋</view>
+          </view>
+        </view>
+        <view class="ed-row">
+          <text class="ed-lbl">餐次</text>
+          <view class="ed-meals">
+            <view v-for="t in mealTypes" :key="t.key"
+                  class="ed-meal" :class="{ active: editMealType === t.key }"
+                  @click="editMealType = t.key">{{ t.name }}</view>
+          </view>
+        </view>
+        <text class="ed-hint">改分量后营养值自动等比重算</text>
+        <view class="ed-btns">
+          <view class="ed-btn cancel" @click="editing = null">取消</view>
+          <view class="ed-btn ok" @click="saveEdit">保存</view>
+        </view>
+      </view>
+    </view>
 
     <!-- 悬浮拍照按钮 -->
     <view class="fab" @click="toScan">
@@ -177,6 +207,10 @@ export default {
       frequent: [],
       // 热量数字滚动动画的显示值
       displayCal: 0,
+      // 当前编辑的记录（null=弹窗关闭）
+      editing: null,
+      editServing: 100,
+      editMealType: 'lunch',
     };
   },
   computed: {
@@ -344,6 +378,29 @@ export default {
     },
     // 跳转食谱推荐页
     toRecipes() { uni.navigateTo({ url: '/pages/recipes/recipes' }); },
+    // ===== 编辑记录 =====
+    openEdit(m) {
+      this.editing = m;
+      this.editServing = m.serving_size;
+      this.editMealType = m.meal_type;
+    },
+    // 步进器调整分量，每步 50，最小 10
+    adjustServing(delta) {
+      this.editServing = Math.max(10, Math.min(2000, (this.editServing || 0) + delta));
+    },
+    async saveEdit() {
+      const m = this.editing;
+      if (!m) return;
+      const s = Math.max(1, Math.min(2000, +this.editServing || m.serving_size));
+      try {
+        await request({ url: `/api/meals/${m.id}`, method: 'PUT', data: { serving_size: s, meal_type: this.editMealType } });
+        this.editing = null;
+        uni.showToast({ title: '已更新', icon: 'success' });
+        this.loadData();
+      } catch (e) {
+        uni.showToast({ title: '保存失败，请重试', icon: 'none' });
+      }
+    },
     delMeal(m) {
       uni.showModal({
         title: '删除', content: `删除「${m.food_name}」这条记录？`,
@@ -483,8 +540,30 @@ export default {
 .m-right { display: flex; align-items: center; gap: 18rpx; }
 .m-cal { font-size: 30rpx; font-weight: 800; color: #FF6B35; }
 .m-cal::after { content: ' kcal'; font-size: 17rpx; color: #ccc; font-weight: 400; }
+.m-edit { font-size: 24rpx; color: #8ab4ff; background: #EDF4FF; width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.m-edit:active { background: #D6E7FF; }
 .m-del { font-size: 24rpx; color: #c9c9c9; background: #F4F5F7; width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .m-del:active { background: #FFE5E5; color: #FF4D4F; }
+
+/* ===== 编辑弹窗 ===== */
+.edit-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.edit-dialog { width: 82%; max-width: 400px; background: #fff; border-radius: 32rpx; padding: 40rpx 36rpx 32rpx; animation: fadeUp .25s ease both; }
+.ed-title { display: block; font-size: 32rpx; font-weight: 800; color: #1a1a1a; text-align: center; }
+.ed-name { display: block; font-size: 26rpx; color: #FF6B35; font-weight: 700; text-align: center; margin-top: 8rpx; }
+.ed-row { display: flex; align-items: center; margin-top: 30rpx; }
+.ed-lbl { width: 150rpx; font-size: 26rpx; color: #666; }
+.ed-stepper { flex: 1; display: flex; align-items: center; gap: 12rpx; }
+.ed-step { width: 64rpx; height: 64rpx; border-radius: 16rpx; background: #F4F5F7; color: #333; font-size: 36rpx; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ed-step:active { background: #FFE8DD; color: #FF6B35; }
+.ed-input { flex: 1; height: 64rpx; text-align: center; font-size: 30rpx; font-weight: 700; background: #FAFBFC; border-radius: 12rpx; }
+.ed-meals { flex: 1; display: flex; gap: 10rpx; flex-wrap: wrap; }
+.ed-meal { padding: 12rpx 22rpx; background: #F4F5F7; border-radius: 30rpx; font-size: 24rpx; color: #666; cursor: pointer; }
+.ed-meal.active { background: #FFF0E8; color: #FF6B35; font-weight: 700; }
+.ed-hint { display: block; font-size: 20rpx; color: #bbb; margin-top: 20rpx; text-align: center; }
+.ed-btns { display: flex; gap: 20rpx; margin-top: 30rpx; }
+.ed-btn { flex: 1; text-align: center; padding: 20rpx 0; border-radius: 40rpx; font-size: 28rpx; font-weight: 700; cursor: pointer; }
+.ed-btn.cancel { background: #F4F5F7; color: #666; }
+.ed-btn.ok { background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; }
 
 /* ===== 悬浮按钮 ===== */
 .fab { position: fixed; bottom: 130rpx; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; padding: 22rpx 52rpx; border-radius: 60rpx; display: flex; align-items: center; box-shadow: 0 12rpx 32rpx rgba(255,94,58,0.42); z-index: 999; cursor: pointer; transition: transform .15s; }

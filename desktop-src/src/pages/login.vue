@@ -1,11 +1,15 @@
 <template>
   <view class="page">
+    <!-- 顶部品牌区：渐变背景 + 装饰圆 -->
     <view class="hero">
-      <view class="logo">🥗</view>
+      <view class="deco d1"></view>
+      <view class="deco d2"></view>
+      <view class="logo-ring"><text class="logo">🥗</text></view>
       <text class="title">健康饮食助手</text>
       <text class="subtitle">拍照识别 · 智能营养 · 科学塑形</text>
     </view>
-    <view class="form">
+    <!-- 表单浮层卡：上移压住渐变，制造层次 -->
+    <view class="form-card">
       <view class="input-box">
         <text class="icon">👤</text>
         <input v-model="form.username" placeholder="用户名" placeholder-style="color:#bbb" />
@@ -19,7 +23,7 @@
         <a class="link" href="#/register" @click="toRegister">还没账号？立即注册</a>
       </view>
     </view>
-    <view class="tip">演示账号 demo / 123456，也可自行注册（数据仅保存在本机）</view>
+    <text class="tip">演示账号 demo / 123456 · 数据仅保存在本机</text>
   </view>
 </template>
 
@@ -63,18 +67,26 @@ export default {
 </script>
 
 <style>
-.page { min-height: 100vh; background: linear-gradient(160deg, #FF6B35 0%, #FF8F5E 60%, #FFB088 100%); padding: 0 48rpx; display: flex; flex-direction: column; }
-.hero { padding-top: 180rpx; text-align: center; color: #fff; }
-.logo { font-size: 120rpx; }
-.title { display:block; font-size: 56rpx; font-weight: 800; margin-top: 20rpx; }
-.subtitle { display:block; font-size: 26rpx; opacity: 0.9; margin-top: 16rpx; }
-.form { margin-top: 100rpx; }
-.input-box { background: #fff; border-radius: 20rpx; padding: 0 28rpx; height: 100rpx; display: flex; align-items: center; margin-bottom: 28rpx; box-shadow: 0 6rpx 20rpx rgba(0,0,0,0.08); }
-.icon { font-size: 36rpx; margin-right: 20rpx; }
+.page { min-height: 100vh; background: #F4F5F7; display: flex; flex-direction: column; }
+/* 品牌区：更饱和的双色渐变 + 半透明装饰圆制造层次 */
+.hero { position: relative; padding: 160rpx 0 140rpx; text-align: center; color: #fff; background: linear-gradient(150deg, #FF7A45 0%, #FF6B35 45%, #FF5E3A 100%); border-radius: 0 0 60rpx 60rpx; overflow: hidden; }
+.deco { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.12); }
+.d1 { width: 320rpx; height: 320rpx; top: -100rpx; right: -80rpx; }
+.d2 { width: 200rpx; height: 200rpx; bottom: -60rpx; left: -50rpx; background: rgba(255,255,255,0.08); }
+/* 图标外圈：白色半透明圆环，品牌感 */
+.logo-ring { width: 160rpx; height: 160rpx; margin: 0 auto; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; border: 4rpx solid rgba(255,255,255,0.4); position: relative; }
+.logo { font-size: 90rpx; line-height: 1; }
+.title { display:block; font-size: 52rpx; font-weight: 800; margin-top: 24rpx; letter-spacing: 2rpx; position: relative; }
+.subtitle { display:block; font-size: 25rpx; opacity: 0.9; margin-top: 14rpx; position: relative; }
+/* 表单卡：白卡上浮，投影 + 负边距压住渐变 */
+.form-card { margin: -70rpx 48rpx 0; background: #fff; border-radius: 32rpx; padding: 44rpx 36rpx; box-shadow: 0 16rpx 48rpx rgba(0,0,0,0.08); position: relative; }
+.input-box { background: #F7F8FA; border-radius: 20rpx; padding: 0 28rpx; height: 100rpx; display: flex; align-items: center; margin-bottom: 26rpx; }
 .input-box input { flex: 1; font-size: 30rpx; }
-.btn { background: #fff; color: #FF6B35; border: none; border-radius: 20rpx; height: 96rpx; line-height: 96rpx; font-size: 34rpx; font-weight: 700; margin-top: 20rpx; box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.12); }
-.link-row { text-align: center; margin-top: 40rpx; color: #fff; font-size: 26rpx; }
-.link { color: #fff; font-size: 26rpx; text-decoration: underline; cursor: pointer; -webkit-tap-highlight-color: rgba(255,255,255,0.3); }
-.tip { position: absolute; bottom: 40rpx; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.7); font-size: 22rpx; }
+.icon { font-size: 36rpx; margin-right: 20rpx; }
+.btn { background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; border: none; border-radius: 24rpx; height: 96rpx; line-height: 96rpx; font-size: 34rpx; font-weight: 700; margin-top: 12rpx; box-shadow: 0 10rpx 26rpx rgba(255,94,58,0.35); }
+.btn:active { transform: scale(0.98); }
+.link-row { text-align: center; margin-top: 34rpx; color: #999; font-size: 26rpx; }
+.link { color: #FF6B35; font-size: 26rpx; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.tip { text-align: center; color: #b9b9b9; font-size: 22rpx; margin-top: auto; padding: 40rpx 0; }
 </style>
 

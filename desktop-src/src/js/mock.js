@@ -1,4 +1,5 @@
 // 纯前端 Mock 层 —— 所有数据存 localStorage，无需后端
+import { FOOD_DB_EXTENDED, searchFood as dbSearch, toSearchItem } from './food-db.js';
 const DB_KEY = 'health_app_mock_db';
 
 function todayStr() {
@@ -265,6 +266,17 @@ function recognizeFoods(features) {
 
 // 计算 BMR/TDEE
 function calcTargets(u) {
+  // 用户手动设定了热量目标时：蛋白/脂肪/碳水/饮水仍按身体数据推算，只锁热量
+  if (u.custom_calories && u.custom_calories >= 800 && u.custom_calories <= 6000) {
+    const cal = +u.custom_calories;
+    return {
+      target_calories: Math.round(cal),
+      target_protein: Math.round(u.weight * 1.6),
+      target_fat: Math.round(cal * 0.25 / 9),
+      target_carbs: Math.round((cal - u.weight * 1.6 * 4 - cal * 0.25) / 4),
+      target_water: Math.round(u.weight * 35),
+    };
+  }
   let bmr;
   if (u.gender === 'male') {
     bmr = 10*u.weight + 6.25*u.height - 5*u.age + 5;
@@ -352,35 +364,15 @@ export function mockRequest(method, url, data) {
     return { items, engine: 'qwen-vl', image_url: '' };
   }
 
-  // 食物搜索（支持别名/拼音/模糊匹配）
-  const FOOD_ALIASES = {
-    '米饭': ['饭', '白饭', '蒸饭', 'mifan'],
-    '面条': ['面', '挂面', '拉面', 'miantiao'],
-    '鸡蛋': ['蛋', '水煮蛋', '煮蛋', 'jidan'],
-    '牛奶': ['milk', '鲜奶'],
-    '鸡胸肉': ['鸡胸', '鸡胸脯肉', 'jixiongrou'],
-    '番茄炒蛋': ['西红柿炒蛋', '番茄鸡蛋', 'fanqie'],
-    '清炒时蔬': ['青菜', '蔬菜', '炒青菜', 'qingshao'],
-    '凉拌黄瓜': ['拍黄瓜', '黄瓜', 'huanggua'],
-    '红烧肉': ['扣肉', '东坡肉', 'hongshaorou'],
-    '宫保鸡丁': ['宫爆鸡丁', 'gongbao'],
-    '鱼香肉丝': ['yuxiang', '肉丝'],
-    '麻婆豆腐': ['麻婆', '豆腐', 'mapodoufu'],
-    '三明治': ['三文治', 'sanmingzhi'],
-    '汉堡': ['汉堡包', 'hanbao'],
-    '可乐': ['cola', 'coke'],
-    '奶茶': ['珍珠奶茶', 'naicha'],
-  };
+  // 食物搜索：接入扩展食物库（196条），支持 名字/全拼/别名 匹配 + 相关度排序
   if (url === '/api/meals/foods/search' && method === 'GET') {
-    const kw = (data.keyword || '').trim().toLowerCase();
-    if (!kw) return FOOD_DB.slice(0, 20).map(f => ({ name: f.name, cat: f.cat, category: f.cat, calories: f.calories, protein: f.protein, fat: f.fat, carbs: f.carbs, fiber: f.fiber, sodium: f.sodium, serving_hint: '约 ' + f.unit }));
-    const match = (f) => {
-      if (f.name.toLowerCase().includes(kw)) return true;
-      const aliases = FOOD_ALIASES[f.name] || [];
-      return aliases.some(a => a.toLowerCase().includes(kw));
-    };
-    const picked = FOOD_DB.filter(match).slice(0, 20);
-    return picked.map(f => ({ name: f.name, cat: f.cat, category: f.cat, calories: f.calories, protein: f.protein, fat: f.fat, carbs: f.carbs, fiber: f.fiber, sodium: f.sodium, serving_hint: '约 ' + f.unit }));
+    return dbSearch(data.keyword || '', 20).map(toSearchItem);
+  }
+
+  // 食物分类浏览（薄荷风：按类目逛食物库）
+  if (url === '/api/foods/categories' && method === 'GET') {
+    const cats = ['主食', '肉蛋', '蔬菜', '水果', '饮品', '快餐'];
+    return cats.map(c => ({ cat: c, count: FOOD_DB_EXTENDED.filter(f => f.cat === c).length }));
   }
   
   // 餐食
@@ -405,6 +397,29 @@ export function mockRequest(method, url, data) {
       saveDB(db);
     }
     return { message: 'deleted' };
+  }
+
+  // 编辑餐食记录（改分量/改餐次）：营养值按新分量等比重算（基准 100g 记录值）
+  const mealEdit = url.match(/^\/api\/meals\/(\d+)$/);
+  if (mealEdit && method === 'PUT') {
+    if (!db.meals[uid]) return { __status: 404, detail: 'Not found' };
+    const meal = db.meals[uid].find(m => m.id === parseInt(mealEdit[1]));
+    if (!meal) return { __status: 404, detail: 'Not found' };
+    const newServing = Math.max(1, Math.min(2000, +data.serving_size || meal.serving_size));
+    // 等比重算系数：以原记录分量为基准
+    const ratio = newServing / (meal.serving_size || 100);
+    meal.serving_size = newServing;
+    if (data.meal_type && ['breakfast', 'lunch', 'dinner', 'snack'].includes(data.meal_type)) {
+      meal.meal_type = data.meal_type;
+    }
+    meal.calories = +(meal.calories * ratio).toFixed(1);
+    meal.protein = +(meal.protein * ratio).toFixed(1);
+    meal.fat = +(meal.fat * ratio).toFixed(1);
+    meal.carbs = +(meal.carbs * ratio).toFixed(1);
+    meal.fiber = +((meal.fiber || 0) * ratio).toFixed(1);
+    meal.sodium = Math.round((meal.sodium || 0) * ratio);
+    saveDB(db);
+    return { ...meal };
   }
   
   // 今日统计（home 页契约：需要 target 目标和 meals 明细）
