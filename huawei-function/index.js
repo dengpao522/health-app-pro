@@ -18,15 +18,16 @@ const RATE_LIMIT = { max: 10, windowMs: 60 * 1000 };
 const MAX_IMAGE_LEN = 6 * 1024 * 1024;
 // 内存限流桶（云函数实例级，重启清零，与 Workers 行为一致）
 const rateBuckets = new Map();
-setInterval(() => {
-  const now = Date.now();
+// 惰性清理：与 worker.js 保持同步（Workers 禁止全局定时器，统一用请求路径内清理）
+function cleanExpiredBuckets(now) {
   for (const [ip, b] of rateBuckets) {
     if (now - b.windowStart > RATE_LIMIT.windowMs) rateBuckets.delete(ip);
   }
-}, 5 * 60 * 1000).unref?.();
+}
 
 function isRateLimited(ip) {
   const now = Date.now();
+  cleanExpiredBuckets(now);
   const bucket = rateBuckets.get(ip);
   if (!bucket || now - bucket.windowStart > RATE_LIMIT.windowMs) {
     rateBuckets.set(ip, { count: 1, windowStart: now });
