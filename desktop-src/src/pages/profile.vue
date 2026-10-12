@@ -56,7 +56,6 @@
         </picker>
       </view>
       <button class="save-btn" @click="saveProfile">保存并重算目标</button>
-      <!-- 自定义热量目标：开启后覆盖公式计算的热量（蛋白/脂肪/碳水仍按身体数据推算） -->
       <view class="custom-cal">
         <view class="cc-head">
           <text class="cc-title">🎯 自定义热量目标</text>
@@ -73,6 +72,23 @@
           <text class="cc-hint">范围 800~6000 kcal，开启后立即生效</text>
         </view>
       </view>
+      <!-- 自定义饮水目标：与热量同款交互 -->
+      <view class="custom-cal">
+        <view class="cc-head">
+          <text class="cc-title">💧 自定义饮水目标</text>
+          <view class="cc-switch" :class="{ on: useCustomWater }" @click="toggleCustomWater">
+            <view class="cc-knob"></view>
+          </view>
+        </view>
+        <view class="cc-body" v-if="useCustomWater">
+          <view class="cc-stepper">
+            <view class="cc-step" @click="adjustWater(-250)">−250</view>
+            <input class="cc-input water" type="number" :value="customWater" @change="customWater = +$event.target.value" />
+            <view class="cc-step" @click="adjustWater(250)">＋250</view>
+          </view>
+          <text class="cc-hint">范围 500~10000 ml，开启后立即生效</text>
+        </view>
+      </view>
     </view>
 
     <!-- 记录体重 -->
@@ -85,8 +101,33 @@
     </view>
 
     <button class="logout-btn" @click="logout">退出登录</button>
+
+    <!-- 外观设置：三态主题（浅色/深色/跟随系统） -->
+    <view class="card theme-card">
+      <view class="card-title">🎨 外观</view>
+      <view class="theme-tabs">
+        <view v-for="t in themeOptions" :key="t.value"
+              class="theme-tab" :class="{ active: themePref === t.value }"
+              @click="setTheme(t.value)">
+          <text class="tt-icon">{{ t.icon }}</text>
+          <text class="tt-name">{{ t.name }}</text>
+        </view>
+      </view>
+    </view>
+
     <!-- 注销账号：跳转邮件客户端提交注销申请（应用商店审核要求的账号注销入口） -->
     <button class="logout-btn delete-btn" @click="deleteAccount">注销账号</button>
+
+    <!-- 数据备份：导出/导入 JSON（换机/清数据前先导出） -->
+    <view class="card backup-card">
+      <view class="card-title">📦 数据备份</view>
+      <text class="bk-desc">数据仅存本机，换机或清缓存前建议先导出备份</text>
+      <view class="bk-btns">
+        <button class="bk-btn" @click="exportData">导出备份</button>
+        <button class="bk-btn ghost" @click="importData">导入恢复</button>
+      </view>
+    </view>
+
     <view style="height: 60rpx;"></view>
   </view>
 </template>
@@ -115,6 +156,16 @@ export default {
       // 自定义热量目标
       useCustomCal: false,
       customCal: 2000,
+      // 自定义饮水目标
+      useCustomWater: false,
+      customWater: 2450,
+      // 主题偏好：light/dark/auto
+      themePref: 'light',
+      themeOptions: [
+        { value: 'light', icon: '☀️', name: '浅色' },
+        { value: 'dark', icon: '🌙', name: '深色' },
+        { value: 'auto', icon: '🌗', name: '跟随系统' },
+      ],
     };
   },
   computed: {
@@ -137,9 +188,12 @@ export default {
     this.activityIdx = ai >= 0 ? ai : 1;
     const gi = GOALS.findIndex(g => g.key === u.goal);
     this.goalIdx = gi >= 0 ? gi : 1;
-    // 恢复自定义热量设置
+    // 恢复自定义热量/饮水/主题设置
     this.useCustomCal = !!(u.custom_calories && u.custom_calories >= 800);
     this.customCal = u.custom_calories || 2000;
+    this.useCustomWater = !!(u.custom_water && u.custom_water >= 500);
+    this.customWater = u.custom_water || Math.round((u.weight || 70) * 35);
+    this.themePref = (typeof window !== 'undefined' && window.__getThemePref) ? window.__getThemePref() : 'light';
   },
   methods: {
     onActivity(e) { this.activityIdx = +e.detail.value; this.form.activity_level = ACTIVITIES[this.activityIdx].key; },
@@ -166,6 +220,86 @@ export default {
           this.user = res;
         } catch (e) {}
       }, 400);
+    },
+    // ===== 自定义饮水（与热量同款防抖模式） =====
+    toggleCustomWater() {
+      this.useCustomWater = !this.useCustomWater;
+      this.applyCustomWater();
+    },
+    adjustWater(delta) {
+      this.customWater = Math.max(500, Math.min(10000, (this.customWater || 2450) + delta));
+      this.applyCustomWater();
+    },
+    applyCustomWater() {
+      clearTimeout(this._waterTimer);
+      this._waterTimer = setTimeout(async () => {
+        const value = this.useCustomWater ? Math.max(500, Math.min(10000, +this.customWater || 2450)) : null;
+        try {
+          const res = await request({ url: '/api/me', method: 'PUT', data: { custom_water: value } });
+          const info = uni.getStorageSync('userInfo');
+          info.user = res;
+          uni.setStorageSync('userInfo', info);
+          this.user = res;
+        } catch (e) {}
+      }, 400);
+    },
+    // ===== 主题切换：调全局入口，App.vue 统一响应 =====
+    setTheme(value) {
+      this.themePref = value;
+      if (typeof window !== 'undefined' && window.__setTheme) window.__setTheme(value);
+    },
+    // ===== 数据备份 =====
+    // 导出：拉整库 JSON，用浏览器下载能力存为 .json 文件
+    async exportData() {
+      try {
+        const payload = await request({ url: '/api/data/export' });
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '健康饮食助手备份_' + new Date().toISOString().slice(0, 10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        uni.showToast({ title: '备份文件已下载', icon: 'success' });
+      } catch (e) {
+        uni.showToast({ title: '导出失败，请重试', icon: 'none' });
+      }
+    },
+    // 导入：文件选择 → 解析 → 二次确认 → 整库覆盖 → 重新登录
+    importData() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        let payload = null;
+        try {
+          payload = JSON.parse(await file.text());
+        } catch (e) {
+          uni.showToast({ title: '文件解析失败', icon: 'none' });
+          return;
+        }
+        uni.showModal({
+          title: '导入备份',
+          content: '导入将覆盖当前全部数据，且需要重新登录。确定继续？',
+          confirmText: '覆盖导入',
+          success: async (r) => {
+            if (!r.confirm) return;
+            try {
+              await request({ url: '/api/data/import', method: 'POST', data: payload });
+              uni.showToast({ title: '导入成功，请重新登录', icon: 'success' });
+              setTimeout(() => {
+                uni.removeStorageSync('userInfo');
+                uni.reLaunch({ url: '/pages/login/login' });
+              }, 1200);
+            } catch (e) {
+              uni.showToast({ title: (e && e.detail) || '导入失败', icon: 'none' });
+            }
+          }
+        });
+      };
+      input.click();
     },
     async saveProfile() {
       const h = +this.form.height, w = +this.form.weight, a = +this.form.age;
@@ -239,8 +373,8 @@ export default {
 .u-name { display: block; font-size: 40rpx; font-weight: 700; }
 .u-meta { display: block; font-size: 26rpx; opacity: 0.9; margin-top: 6rpx; }
 
-.card { background: #fff; border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; }
-.card-title { font-size: 30rpx; font-weight: 700; color: #333; margin-bottom: 24rpx; }
+.card { background: var(--bg-card); border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); }
+.card-title { font-size: 30rpx; font-weight: 700; color: var(--text-1); margin-bottom: 24rpx; }
 
 .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
 .t-item { background: linear-gradient(135deg, #FFF0E8, #FFE0CC); border-radius: 16rpx; padding: 24rpx; text-align: center; }
@@ -280,5 +414,23 @@ export default {
 .cc-step:active { background: #FFE8DD; color: #FF6B35; }
 .cc-input { flex: 1; height: 72rpx; text-align: center; font-size: 34rpx; font-weight: 800; color: #FF6B35; background: #FFF6F2; border-radius: 14rpx; }
 .cc-hint { display: block; font-size: 20rpx; color: #bbb; margin-top: 14rpx; }
+/* 饮水输入的青蓝主题色（与热量橙色区分） */
+.cc-input.water { color: #3D9BFF; background: #F0F7FF; }
+
+/* ===== 数据备份 ===== */
+.backup-card { margin: 20rpx 24rpx; }
+.bk-desc { display: block; font-size: 22rpx; color: #999; margin-bottom: 20rpx; line-height: 1.6; }
+.bk-btns { display: flex; gap: 16rpx; }
+.bk-btn { flex: 1; background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; border: none; border-radius: 18rpx; height: 84rpx; line-height: 84rpx; font-size: 28rpx; font-weight: 700; }
+.bk-btn:active { transform: scale(0.97); }
+.bk-btn.ghost { background: var(--bg-input); color: var(--text-2); }
+
+/* ===== 外观（主题切换） ===== */
+.theme-tabs { display: flex; gap: 14rpx; }
+.theme-tab { flex: 1; text-align: center; padding: 20rpx 0; border-radius: 18rpx; background: var(--bg-input); cursor: pointer; transition: all .2s; }
+.theme-tab.active { background: #FFF0E8; box-shadow: inset 0 0 0 3rpx #FF6B35; }
+.tt-icon { display: block; font-size: 36rpx; }
+.tt-name { display: block; font-size: 22rpx; color: var(--text-2); margin-top: 6rpx; }
+.theme-tab.active .tt-name { color: #FF6B35; font-weight: 700; }
 </style>
 

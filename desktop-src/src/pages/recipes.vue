@@ -110,21 +110,21 @@ export default {
 .page-sub { display: block; font-size: 26rpx; opacity: 0.9; margin-top: 8rpx; }
 
 .meal-tabs { display: flex; gap: 16rpx; margin: 24rpx 24rpx 0; }
-.meal-tab { flex: 1; text-align: center; padding: 18rpx 0; border-radius: 40rpx; background: #fff; color: #666; font-size: 28rpx; font-weight: 600; cursor: pointer; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.04); }
+.meal-tab { flex: 1; text-align: center; padding: 18rpx 0; border-radius: 40rpx; background: var(--bg-card); color: var(--text-2); font-size: 28rpx; font-weight: 600; cursor: pointer; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.04); }
 .meal-tab.active { background: #FF6B35; color: #fff; }
 
-.recipe-card { background: #fff; border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); border-left: 8rpx solid #FF8F5E; }
+.recipe-card { background: var(--bg-card); border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); border-left: 8rpx solid #FF8F5E; }
 .rc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
-.rc-name { font-size: 32rpx; font-weight: 700; color: #333; }
+.rc-name { font-size: 32rpx; font-weight: 700; color: var(--text-1); }
 .rc-tags { display: flex; gap: 8rpx; }
 .rc-tag { font-size: 20rpx; padding: 4rpx 14rpx; border-radius: 16rpx; font-weight: 600; }
 .rc-tag.lose { background: #E8FFF8; color: #1f8a70; }
 .rc-tag.maintain { background: #FFF8E8; color: #8a6a1f; }
 .rc-tag.gain { background: #FFF0E8; color: #d4552a; }
 
-.rc-nutrition { display: flex; gap: 20rpx; flex-wrap: wrap; padding: 16rpx; background: #FAFAFC; border-radius: 16rpx; margin-bottom: 16rpx; }
+.rc-nutrition { display: flex; gap: 20rpx; flex-wrap: wrap; padding: 16rpx; background: var(--bg-soft); border-radius: 16rpx; margin-bottom: 16rpx; }
 .rc-cal { font-size: 26rpx; font-weight: 700; color: #FF6B35; }
-.rc-macro { font-size: 24rpx; color: #666; }
+.rc-macro { font-size: 24rpx; color: var(--text-2); }
 
 .rc-reason { display: flex; gap: 12rpx; background: #FFF6F2; border-radius: 16rpx; padding: 16rpx 20rpx; margin-bottom: 20rpx; align-items: flex-start; }
 .rc-reason-icon { flex-shrink: 0; font-size: 24rpx; }
@@ -132,10 +132,10 @@ export default {
 
 .rc-section { margin-bottom: 12rpx; }
 .rc-section:last-child { margin-bottom: 0; }
-.rc-section-title { display: block; font-size: 26rpx; font-weight: 700; color: #333; margin-bottom: 10rpx; }
+.rc-section-title { display: block; font-size: 26rpx; font-weight: 700; color: var(--text-1); margin-bottom: 10rpx; }
 .rc-ingredients { display: flex; flex-wrap: wrap; gap: 10rpx; }
-.rc-ingredient { font-size: 22rpx; color: #555; background: #F5F6FA; padding: 6rpx 16rpx; border-radius: 12rpx; }
+.rc-ingredient { font-size: 22rpx; color: var(--text-2); background: var(--bg-input); padding: 6rpx 16rpx; border-radius: 12rpx; }
 .rc-step { display: flex; gap: 14rpx; align-items: flex-start; margin-bottom: 8rpx; }
 .rc-step-num { flex-shrink: 0; width: 34rpx; height: 34rpx; border-radius: 50%; background: #FFE0CC; color: #d4552a; font-size: 20rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2rpx; }
-.rc-step-text { font-size: 24rpx; color: #555; line-height: 1.6; }
+.rc-step-text { font-size: 24rpx; color: var(--text-2); line-height: 1.6; }
 </style>

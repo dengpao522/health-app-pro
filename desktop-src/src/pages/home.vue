@@ -447,21 +447,21 @@ export default {
 /* 四迷你环行 */
 .mini-row { display: flex; justify-content: space-around; margin-top: 36rpx; padding-top: 30rpx; border-top: 1rpx solid #F4F5F7; }
 .mini-item { text-align: center; }
-/* 迷你环：锥形渐变底 + 圆心遮罩挖洞，中心放 emoji */
+/* 迷你环：锥形渐变底 + 圆心遮罩挖洞，中心放 emoji（圆心色跟随卡片底色） */
 .mini-ring { width: 88rpx; height: 88rpx; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; position: relative; transition: background 0.6s; }
-.mini-ring::before { content: ''; position: absolute; inset: 9rpx; background: #fff; border-radius: 50%; }
+.mini-ring::before { content: ''; position: absolute; inset: 9rpx; background: var(--bg-card); border-radius: 50%; }
 .mini-emoji { position: relative; font-size: 30rpx; }
-.mini-val { display: block; font-size: 26rpx; font-weight: 800; color: #333; margin-top: 10rpx; font-variant-numeric: tabular-nums; }
+.mini-val { display: block; font-size: 26rpx; font-weight: 800; color: var(--text-1); margin-top: 10rpx; font-variant-numeric: tabular-nums; }
 .mini-val.over { color: #FF4D4F; }
 .mini-unit { font-size: 18rpx; color: #bbb; font-weight: 400; }
 .mini-name { display: block; font-size: 20rpx; color: #999; margin-top: 2rpx; }
 
-/* ===== 通用卡片 ===== */
-.card { background: #fff; border-radius: 28rpx; padding: 30rpx 28rpx; margin: 22rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); }
+/* ===== 主题适配：卡片/文字走变量 ===== */
+.card { background: var(--bg-card); border-radius: 28rpx; padding: 30rpx 28rpx; margin: 22rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); }
 .card-head { display: flex; align-items: center; gap: 12rpx; margin-bottom: 22rpx; }
 .ch-icon { font-size: 30rpx; }
-.ch-title { font-size: 30rpx; font-weight: 800; color: #1a1a1a; flex: 1; }
-.ch-sub { font-size: 20rpx; color: #bbb; }
+.ch-title { font-size: 30rpx; font-weight: 800; color: var(--text-1); flex: 1; }
+.ch-sub { font-size: 20rpx; color: var(--text-4); }
 .ch-val { font-size: 24rpx; color: #4ECDC4; font-weight: 700; }
 .ch-val.orange { color: #FF6B35; }
 
@@ -470,21 +470,21 @@ export default {
 .sb-left { display: flex; align-items: center; gap: 20rpx; flex-shrink: 0; }
 /* 评分环：锥形渐变 + 内圆挖洞 */
 .sb-ring { width: 120rpx; height: 120rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; transition: background 0.6s; }
-.sb-ring-inner { position: absolute; inset: 10rpx; background: #fff; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.sb-num { font-size: 40rpx; font-weight: 800; line-height: 1; color: #1a1a1a; }
+.sb-ring-inner { position: absolute; inset: 10rpx; background: var(--bg-card); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.sb-num { font-size: 40rpx; font-weight: 800; line-height: 1; color: var(--text-1); }
 .sb-max { font-size: 16rpx; color: #bbb; margin-top: 2rpx; }
 .sb-info { display: flex; flex-direction: column; gap: 8rpx; }
 .sb-grade { background: #1a1a1a; color: #fff; font-size: 22rpx; font-weight: 700; padding: 4rpx 18rpx; border-radius: 20rpx; align-self: flex-start; }
 .sb-streak { font-size: 24rpx; color: #FF6B35; font-weight: 700; }
 .sb-streak.dim { color: #999; font-weight: 400; }
 .sb-tips { flex: 1; display: flex; flex-direction: column; gap: 8rpx; }
-.sb-tip { font-size: 21rpx; color: #8a6a1f; background: rgba(255,255,255,0.85); padding: 8rpx 16rpx; border-radius: 12rpx; line-height: 1.5; }
+.sb-tip { font-size: 21rpx; color: #8a6a1f; background: var(--bg-card); padding: 8rpx 16rpx; border-radius: 12rpx; line-height: 1.5; }
 .sb-tip.good { color: #1f8a70; }
 
 /* ===== 常吃食物网格 ===== */
 .frequent-card { animation: fadeUp .45s ease both; }
 .freq-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16rpx; }
-.freq-cell { background: #FAFBFC; border-radius: 20rpx; padding: 18rpx 8rpx 14rpx; text-align: center; position: relative; cursor: pointer; transition: transform .15s; }
+.freq-cell { background: var(--bg-soft); border-radius: 20rpx; padding: 18rpx 8rpx 14rpx; text-align: center; position: relative; cursor: pointer; transition: transform .15s; }
 .freq-cell:active { transform: scale(0.94); background: #FFF3ED; }
 /* emoji 彩色底：按分类给不同渐变底色，一眼可辨 */
 .freq-emoji { width: 72rpx; height: 72rpx; margin: 0 auto; border-radius: 22rpx; display: flex; align-items: center; justify-content: center; font-size: 38rpx; }
@@ -495,9 +495,9 @@ export default {
 .c-drink { background: linear-gradient(135deg, #E8F4FF, #D1E8FF); }
 .c-fast { background: linear-gradient(135deg, #FFF3E0, #FFE7BF); }
 .c-other { background: linear-gradient(135deg, #F3F4F6, #E9EBEF); }
-.freq-name { display: block; font-size: 22rpx; font-weight: 600; color: #333; margin-top: 10rpx; white-space: nowrap; overflow: hidden; }
+.freq-name { display: block; font-size: 22rpx; font-weight: 600; color: var(--text-1); margin-top: 10rpx; white-space: nowrap; overflow: hidden; }
 .freq-cal { display: block; font-size: 19rpx; color: #FF6B35; font-weight: 700; margin-top: 2rpx; }
-.freq-count { position: absolute; top: 8rpx; right: 10rpx; font-size: 16rpx; color: #bbb; }
+.freq-count { position: absolute; top: 8rpx; right: 10rpx; font-size: 16rpx; color: var(--text-4); }
 
 /* ===== 食谱横幅入口 ===== */
 .recipe-banner { margin: 22rpx 24rpx; background: linear-gradient(120deg, #22C55E, #16A34A); border-radius: 28rpx; padding: 32rpx 34rpx; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8rpx 24rpx rgba(34,197,94,0.3); cursor: pointer; animation: fadeUp .5s ease both; }
@@ -508,41 +508,41 @@ export default {
 
 /* ===== 饮水 ===== */
 .water-card2 { animation: fadeUp .55s ease both; }
-.water-bar { height: 20rpx; background: #EEF3F8; border-radius: 12rpx; overflow: hidden; }
+.water-bar { height: 20rpx; background: var(--bg-input); border-radius: 12rpx; overflow: hidden; }
 .water-fill { height: 100%; background: linear-gradient(90deg, #6FBCFF, #3D9BFF); border-radius: 12rpx; transition: width .5s ease; }
 .water-actions { display: flex; gap: 14rpx; margin-top: 22rpx; }
-.w-btn2 { flex: 1; text-align: center; padding: 16rpx 0; background: #EEF3F8; color: #3D9BFF; border-radius: 40rpx; font-size: 26rpx; font-weight: 700; cursor: pointer; transition: transform .15s; }
+.w-btn2 { flex: 1; text-align: center; padding: 16rpx 0; background: var(--bg-input); color: #3D9BFF; border-radius: 40rpx; font-size: 26rpx; font-weight: 700; cursor: pointer; transition: transform .15s; }
 .w-btn2:active { transform: scale(0.95); }
 .w-btn2.primary { background: linear-gradient(135deg, #6FBCFF, #3D9BFF); color: #fff; }
 
 /* ===== 餐次与列表 ===== */
 .meal-card { animation: fadeUp .6s ease both; }
 .meal-type-row { display: flex; justify-content: space-between; margin-bottom: 20rpx; gap: 10rpx; }
-.meal-type-item { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 18rpx; background: #F7F8FA; margin: 0; transition: background .2s; }
+.meal-type-item { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 18rpx; background: var(--bg-input); margin: 0; transition: background .2s; }
 .meal-type-item.active { background: #FFF0E8; }
 .mt-icon { display: block; font-size: 30rpx; }
-.mt-name { display: block; font-size: 23rpx; color: #333; margin-top: 4rpx; }
+.mt-name { display: block; font-size: 23rpx; color: var(--text-1); margin-top: 4rpx; }
 .meal-type-item.active .mt-name { color: #FF6B35; font-weight: 700; }
-.mt-cal { display: block; font-size: 19rpx; color: #999; margin-top: 2rpx; }
+.mt-cal { display: block; font-size: 19rpx; color: var(--text-3); margin-top: 2rpx; }
 .meal-type-item.active .mt-cal { color: #FF8F5E; }
 
-.empty { text-align: center; color: #bbb; padding: 50rpx 0; }
+.empty { text-align: center; color: var(--text-4); padding: 50rpx 0; }
 .empty-icon { display: block; font-size: 64rpx; margin-bottom: 14rpx; }
-.empty-text { display: block; font-size: 27rpx; color: #999; }
-.empty-sub { display: block; font-size: 21rpx; color: #c9c9c9; margin-top: 8rpx; }
+.empty-text { display: block; font-size: 27rpx; color: var(--text-3); }
+.empty-sub { display: block; font-size: 21rpx; color: var(--text-4); margin-top: 8rpx; }
 
-.meal-item { display: flex; align-items: center; padding: 20rpx 0; border-bottom: 1rpx solid #F7F8FA; }
+.meal-item { display: flex; align-items: center; padding: 20rpx 0; border-bottom: 1rpx solid var(--line); }
 .meal-item:last-child { border-bottom: none; }
 .m-dot { color: #FFB088; font-size: 32rpx; margin-right: 16rpx; }
 .m-info { flex: 1; }
-.m-name { display: block; font-size: 28rpx; font-weight: 600; color: #222; }
-.m-meta { display: block; font-size: 21rpx; color: #aaa; margin-top: 4rpx; }
+.m-name { display: block; font-size: 28rpx; font-weight: 600; color: var(--text-1); }
+.m-meta { display: block; font-size: 21rpx; color: var(--text-3); margin-top: 4rpx; }
 .m-right { display: flex; align-items: center; gap: 18rpx; }
 .m-cal { font-size: 30rpx; font-weight: 800; color: #FF6B35; }
-.m-cal::after { content: ' kcal'; font-size: 17rpx; color: #ccc; font-weight: 400; }
+.m-cal::after { content: ' kcal'; font-size: 17rpx; color: var(--text-4); font-weight: 400; }
 .m-edit { font-size: 24rpx; color: #8ab4ff; background: #EDF4FF; width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .m-edit:active { background: #D6E7FF; }
-.m-del { font-size: 24rpx; color: #c9c9c9; background: #F4F5F7; width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.m-del { font-size: 24rpx; color: var(--text-4); background: var(--bg-input); width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .m-del:active { background: #FFE5E5; color: #FF4D4F; }
 
 /* ===== 编辑弹窗 ===== */

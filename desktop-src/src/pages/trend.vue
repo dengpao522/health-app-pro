@@ -217,8 +217,8 @@ export default {
 .top-bar { padding: 100rpx 32rpx 30rpx; background: linear-gradient(160deg, #FF6B35, #FF8F5E); color: #fff; }
 .page-title { display: block; font-size: 44rpx; font-weight: 800; }
 .page-sub { display: block; font-size: 26rpx; opacity: 0.9; margin-top: 8rpx; }
-.card { background: #fff; border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; }
-.card-title { font-size: 30rpx; font-weight: 700; color: #333; margin-bottom: 20rpx; }
+.card { background: var(--bg-card); border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); }
+.card-title { font-size: 30rpx; font-weight: 700; color: var(--text-1); margin-bottom: 20rpx; }
 .chart { width: 100%; height: 320rpx; }
 .chart-legend { display: flex; gap: 30rpx; margin-top: 10rpx; flex-wrap: wrap; }
 .legend-item { font-size: 22rpx; color: #666; display: flex; align-items: center; }
@@ -237,6 +237,6 @@ export default {
 .report-insights { display: flex; flex-direction: column; gap: 12rpx; }
 .insight-item { display: flex; gap: 12rpx; align-items: flex-start; }
 .insight-dot { font-size: 24rpx; flex-shrink: 0; margin-top: 2rpx; }
-.insight-text { font-size: 24rpx; color: #555; line-height: 1.6; }
+.insight-text { font-size: 24rpx; color: var(--text-2); line-height: 1.6; }
 </style>
 

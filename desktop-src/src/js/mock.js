@@ -267,33 +267,30 @@ function recognizeFoods(features) {
 // 计算 BMR/TDEE
 function calcTargets(u) {
   // 用户手动设定了热量目标时：蛋白/脂肪/碳水/饮水仍按身体数据推算，只锁热量
-  if (u.custom_calories && u.custom_calories >= 800 && u.custom_calories <= 6000) {
-    const cal = +u.custom_calories;
-    return {
-      target_calories: Math.round(cal),
-      target_protein: Math.round(u.weight * 1.6),
-      target_fat: Math.round(cal * 0.25 / 9),
-      target_carbs: Math.round((cal - u.weight * 1.6 * 4 - cal * 0.25) / 4),
-      target_water: Math.round(u.weight * 35),
-    };
-  }
-  let bmr;
-  if (u.gender === 'male') {
-    bmr = 10*u.weight + 6.25*u.height - 5*u.age + 5;
+  const isCustomCal = u.custom_calories && u.custom_calories >= 800 && u.custom_calories <= 6000;
+  const isCustomWater = u.custom_water && u.custom_water >= 500 && u.custom_water <= 10000;
+  let bmr, cal;
+  if (isCustomCal) {
+    cal = +u.custom_calories;
   } else {
-    bmr = 10*u.weight + 6.25*u.height - 5*u.age - 161;
+    if (u.gender === 'male') {
+      bmr = 10*u.weight + 6.25*u.height - 5*u.age + 5;
+    } else {
+      bmr = 10*u.weight + 6.25*u.height - 5*u.age - 161;
+    }
+    const actMap = { sedentary:1.2, light:1.375, moderate:1.55, active:1.725, very_active:1.9 };
+    const tdee = bmr * (actMap[u.activity_level] || 1.375);
+    cal = tdee;
+    if (u.goal === 'lose') cal = tdee - 400;
+    else if (u.goal === 'gain') cal = tdee + 400;
   }
-  const actMap = { sedentary:1.2, light:1.375, moderate:1.55, active:1.725, very_active:1.9 };
-  const tdee = bmr * (actMap[u.activity_level] || 1.375);
-  let cal = tdee;
-  if (u.goal === 'lose') cal = tdee - 400;
-  else if (u.goal === 'gain') cal = tdee + 400;
   return {
     target_calories: Math.round(cal),
     target_protein: Math.round(u.weight * 1.6),
     target_fat: Math.round(cal * 0.25 / 9),
     target_carbs: Math.round((cal - u.weight*1.6*4 - cal*0.25) / 4),
-    target_water: Math.round(u.weight * 35),
+    // 饮水目标：自定义优先（ml），否则按 35ml/kg 推算
+    target_water: isCustomWater ? Math.round(+u.custom_water) : Math.round(u.weight * 35),
   };
 }
 
@@ -658,6 +655,38 @@ export function mockRequest(method, url, data) {
       weight_change: weightChange,
       insights,
     };
+  }
+
+  // ============ 数据导出：整库打包（含用户/餐食/饮水/体重），密钥不出库 ============
+  if (url === '/api/data/export' && method === 'GET') {
+    return {
+      version: 1,
+      exported_at: new Date().toISOString(),
+      data: db,
+    };
+  }
+
+  // ============ 数据导入：整库恢复（覆盖当前库），成功后需重新登录 ============
+  if (url === '/api/data/import' && method === 'POST') {
+    const incoming = data && data.data;
+    if (!incoming || !incoming.users || !incoming.meals) {
+      return { __status: 400, detail: '备份文件格式不正确' };
+    }
+    // 基础结构校验通过后整库覆盖；导入后登录态指向原库用户，重置为未登录防串号
+    const restored = {
+      users: incoming.users || {},
+      meals: incoming.meals || {},
+      waters: incoming.waters || {},
+      weights: incoming.weights || {},
+      currentUser: null,
+    };
+    db.users = restored.users;
+    db.meals = restored.meals;
+    db.waters = restored.waters;
+    db.weights = restored.weights;
+    db.currentUser = null;
+    saveDB(db);
+    return { message: '导入成功，请重新登录' };
   }
 
   return { __status: 404, detail: 'Not found' };
