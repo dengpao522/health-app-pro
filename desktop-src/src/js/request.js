@@ -152,7 +152,7 @@ function recognizeByAI(dataUrl) {
     const timer = setTimeout(() => controller.abort(), 45000);
     fetch(workerUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-app-client': 'healthpro-v1' },
       body: JSON.stringify({ image: dataUrl }),
       signal: controller.signal,
     })
@@ -203,7 +203,7 @@ function recognizeByAIStream(dataUrl, handlers = {}) {
 
     fetch(workerUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-app-client': 'healthpro-v1' },
       body: JSON.stringify({ image: dataUrl }),
       signal: controller.signal,
     }).then(async (resp) => {

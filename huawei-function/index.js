@@ -11,6 +11,30 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
 ];
+// ===== 防刷配置（与 worker.js 保持同步） =====
+const REQUIRED_HEADER = 'x-app-client';
+const REQUIRED_VALUE = 'healthpro-v1';
+const RATE_LIMIT = { max: 10, windowMs: 60 * 1000 };
+const MAX_IMAGE_LEN = 6 * 1024 * 1024;
+// 内存限流桶（云函数实例级，重启清零，与 Workers 行为一致）
+const rateBuckets = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, b] of rateBuckets) {
+    if (now - b.windowStart > RATE_LIMIT.windowMs) rateBuckets.delete(ip);
+  }
+}, 5 * 60 * 1000).unref?.();
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const bucket = rateBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart > RATE_LIMIT.windowMs) {
+    rateBuckets.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT.max;
+}
 const QWEN_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const SYSTEM_PROMPT = '你是一名专业营养师。识别图片中的所有食物（逐项列出，包括主食、菜肴、水果、饮品、零食等），并依据《中国食物成分表》估算每100克（饮品按每100毫升）的营养数据，以及图片中该食物的总重量。只返回一个 JSON 数组，不要输出 markdown 代码块、不要输出任何解释文字。数组每个元素包含字段：name(具体的中文食物名)、category(只能是:主食/肉蛋/蔬菜/水果/饮品/快餐/其他)、confidence(0到1)、calories(每100g热量kcal)、protein、fat、carbs、fiber(克)、sodium(毫克)、serving_hint(常见一份描述)、suggested_serving(数字:图中该食物估算总克重)。如果图片里没有任何食物，返回 []。';
 
@@ -19,7 +43,7 @@ function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, ' + REQUIRED_HEADER,
   };
 }
 
@@ -74,6 +98,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ===== 防刷第一层：请求头校验 =====
+  if (req.headers[REQUIRED_HEADER] !== REQUIRED_VALUE) {
+    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', ...cors });
+    res.end(JSON.stringify({ error: 'client_forbidden' }));
+    return;
+  }
+  // ===== 防刷第二层：单 IP 限流（云函数取 x-forwarded-for 首个 IP） =====
+  const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  if (isRateLimited(clientIp)) {
+    res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', ...cors });
+    res.end(JSON.stringify({ error: 'rate_limited' }));
+    return;
+  }
+
   const apiKey = process.env.DASHSCOPE_API_KEY;
   if (!apiKey) {
     res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8', ...cors });
@@ -105,6 +143,12 @@ const server = http.createServer(async (req, res) => {
   if (!/^data:image\/(jpeg|jpg|png|webp);base64,/.test(image)) {
     res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', ...cors });
     res.end(JSON.stringify({ error: 'invalid_image' }));
+    return;
+  }
+  // ===== 防刷第三层：图片体积上限 =====
+  if (image.length > MAX_IMAGE_LEN) {
+    res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8', ...cors });
+    res.end(JSON.stringify({ error: 'image_too_large' }));
     return;
   }
 
