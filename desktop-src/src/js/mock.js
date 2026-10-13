@@ -26,9 +26,11 @@ function loadDB() {
   }
   let changed = false;
   if (!db) {
-    db = { users: {}, meals: {}, waters: {}, weights: {}, currentUser: null };
+    db = { users: {}, meals: {}, waters: {}, weights: {}, exercises: {}, currentUser: null };
     changed = true;
   }
+  // 旧版本库升级：补运动记录表（老用户无痛升级）
+  if (!db.exercises) { db.exercises = {}; changed = true; }
   // 老用户升级到新版时也补上演示账号（demo / 123456），不影响其已有账号
   if (!Object.values(db.users).some(u => u.username === 'demo')) {
     seedDemo(db);
@@ -65,6 +67,7 @@ function seedDemo(db) {
   if (!db.meals) db.meals = {};
   if (!db.waters) db.waters = {};
   if (!db.weights) db.weights = {};
+  if (!db.exercises) db.exercises = {};
   if (db.meals[uid]) return; // 已有演示数据则不重复注入
   db.meals[uid] = [];
   let mid = 100000;
@@ -119,6 +122,24 @@ function last7Days() {
   }
   return arr;
 }
+
+// ============ 运动库（MET 值 × 体重 × 时长 = 消耗 kcal，与运动科学口径一致） ============
+const EXERCISE_DB = [
+  { type: '快走', met: 4.3, icon: '🚶' },
+  { type: '慢跑', met: 7.5, icon: '🏃' },
+  { type: '骑行', met: 6.8, icon: '🚴' },
+  { type: '游泳', met: 6.0, icon: '🏊' },
+  { type: '跳绳', met: 11.0, icon: '🪢' },
+  { type: '瑜伽', met: 2.5, icon: '🧘' },
+  { type: '健身操', met: 5.5, icon: '🤸' },
+  { type: '力量训练', met: 5.0, icon: '🏋️' },
+  { type: '篮球', met: 6.5, icon: '🏀' },
+  { type: '羽毛球', met: 5.5, icon: '🏸' },
+  { type: '乒乓球', met: 4.0, icon: '🏓' },
+  { type: '爬楼梯', met: 8.0, icon: '🪜' },
+  { type: '散步', met: 2.8, icon: '👫' },
+  { type: '拉伸', met: 2.3, icon: '🤗' },
+];
 
 // 食物库（cat: 主食/肉蛋/蔬菜/快餐/饮品/水果）
 const FOOD_DB = [
@@ -428,12 +449,17 @@ export function mockRequest(method, url, data) {
       c += m.carbs||0; fb += m.fiber||0; na += m.sodium||0;
     });
     const water = (db.waters[uid] || []).filter(w => w.date === todayStr()).reduce((s,w) => s+w.amount, 0);
+    // 今日运动：消耗值参与热量平衡（前端按 运动×0.9 抵扣）
+    const exList = (db.exercises[uid] || []).filter(e => e.date === todayStr());
+    const exCal = exList.reduce((s, e) => s + (e.calories || 0), 0);
     const tg = calcTargets(user);
     return {
       date: todayStr(),
       calories: Math.round(cal), protein: +p.toFixed(1), fat: +f.toFixed(1),
       carbs: +c.toFixed(1), fiber: +fb.toFixed(1), sodium: Math.round(na),
       water,
+      exercise_calories: exCal,
+      exercises: exList.map(e => ({ ...e })),
       meals: list.map(m => ({ ...m })),
       // home 页契约：目标字段名不带 target_ 前缀
       target: {
@@ -657,6 +683,99 @@ export function mockRequest(method, url, data) {
     };
   }
 
+  // ============ 运动记录 ============
+  // 运动库元数据（MET 表）
+  if (url === '/api/exercises/meta' && method === 'GET') return EXERCISE_DB;
+
+  // 记录运动：kcal = MET × 体重kg × 时长h（按用户当前体重折算）
+  if (url === '/api/exercises' && method === 'POST') {
+    if (!db.exercises[uid]) db.exercises[uid] = [];
+    const ex = EXERCISE_DB.find(e => e.type === data.type) || { type: data.type || '运动', met: 4 };
+    const minutes = Math.max(5, Math.min(300, +data.minutes || 30));
+    const rec = {
+      id: Date.now(), date: todayStr(), created_at: new Date().toISOString(),
+      type: ex.type, icon: ex.icon, minutes,
+      calories: Math.round(ex.met * (user.weight || 70) * minutes / 60),
+    };
+    db.exercises[uid].push(rec);
+    saveDB(db);
+    return rec;
+  }
+
+  // 今日运动列表
+  if (url === '/api/exercises' && method === 'GET') {
+    return (db.exercises[uid] || []).filter(e => e.date === todayStr()).map(e => ({ ...e }));
+  }
+
+  // 删除运动记录
+  const exDel = url.match(/^\/api\/exercises\/(\d+)$/);
+  if (exDel && method === 'DELETE') {
+    if (db.exercises[uid]) {
+      db.exercises[uid] = db.exercises[uid].filter(e => e.id !== parseInt(exDel[1]));
+      saveDB(db);
+    }
+    return { message: 'deleted' };
+  }
+
+  // ============ 体重管理方案（初始 → 已减 → 目标，薄荷同款进度卡） ============
+  if (url === '/api/weight/plan' && method === 'GET') {
+    const ws = (db.weights[uid] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    const start = ws.length ? ws[0].weight : (user.weight || 70);
+    const current = ws.length ? ws[ws.length - 1].weight : (user.weight || 70);
+    // 目标体重：用户手动设过用用户的；否则默认减 5kg 的合理起步目标
+    const target = user.target_weight || Math.round((current - 5) * 10) / 10;
+    return {
+      start_weight: start, current_weight: current, target_weight: target,
+      lost: +(start - current).toFixed(1), remain: +Math.max(0, current - target).toFixed(1),
+    };
+  }
+
+  // ============ 成就徽章 + 积分（全部本地规则计算） ============
+  if (url === '/api/me/achievements' && method === 'GET') {
+    const meals = db.meals[uid] || [];
+    const exs = db.exercises[uid] || [];
+    const waters = db.waters[uid] || [];
+    const days = new Set(meals.map(m => m.date));
+    // 当前连续打卡
+    let cur = 0, off = days.has(todayStr()) ? 0 : 1;
+    while (days.has(dateOffset(off))) { cur += 1; off += 1; }
+    // 历史最长连续打卡
+    let maxStreak = 0, run = 0, prev = null;
+    for (const d of [...days].sort()) {
+      const diff = prev ? Math.round((new Date(d) - new Date(prev)) / 86400000) : 1;
+      run = diff === 1 ? run + 1 : 1;
+      maxStreak = Math.max(maxStreak, run);
+      prev = d;
+    }
+    const badges = [
+      { key: 'streak3', name: '打卡新星', icon: '🌟', desc: '连续打卡3天', earned: maxStreak >= 3 },
+      { key: 'streak7', name: '坚持之星', icon: '⭐', desc: '连续打卡7天', earned: maxStreak >= 7 },
+      { key: 'streak30', name: '自律王者', icon: '👑', desc: '连续打卡30天', earned: maxStreak >= 30 },
+      { key: 'meal50', name: '记录达人', icon: '📝', desc: '累计记录50餐', earned: meals.length >= 50 },
+      { key: 'sport10', name: '运动健将', icon: '🏅', desc: '累计运动10次', earned: exs.length >= 10 },
+      { key: 'sport30', name: '活力无限', icon: '⚡', desc: '累计运动30次', earned: exs.length >= 30 },
+      { key: 'water30', name: '补水专家', icon: '💧', desc: '累计饮水30杯', earned: waters.length >= 30 },
+    ];
+    return {
+      badges,
+      earnedCount: badges.filter(b => b.earned).length,
+      // 积分公式：记录 2 分/餐 + 运动 5 分/次 + 最长连胜 10 分/天 + 饮水 1 分/杯
+      points: meals.length * 2 + exs.length * 5 + maxStreak * 10 + waters.length,
+      maxStreak, current: cur,
+    };
+  }
+
+  // ============ 圈子动态流（个人打卡日志流：最近 15 条餐食生成动态） ============
+  if (url === '/api/community/feed' && method === 'GET') {
+    const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
+    return (db.meals[uid] || []).slice(-15).reverse().map(m => ({
+      id: m.id, food_name: m.food_name, calories: m.calories,
+      meal_type: m.meal_type, meal_name: mealNames[m.meal_type] || '加餐',
+      date: m.date, time: (m.created_at || '').slice(11, 16),
+      serving_size: m.serving_size, serving_unit: m.serving_unit || 'g',
+    }));
+  }
+
   // ============ 数据导出：整库打包（含用户/餐食/饮水/体重），密钥不出库 ============
   if (url === '/api/data/export' && method === 'GET') {
     return {
@@ -693,4 +812,4 @@ export function mockRequest(method, url, data) {
 }
 
 export const FOOD_LIST = FOOD_DB;
-export { recognizeFoods };
+export { recognizeFoods, EXERCISE_DB };

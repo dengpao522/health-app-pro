@@ -32,6 +32,7 @@ export default {
       theme: 'light',
       tabs: [
         { path: '/home', icon: '🏠', text: '今日' },
+        { path: '/community', icon: '👥', text: '圈子' },
         { path: '/scan', icon: '📷', text: '拍照', camera: true },
         { path: '/trend', icon: '📊', text: '趋势' },
         { path: '/profile', icon: '👤', text: '我的' },
@@ -41,7 +42,7 @@ export default {
   computed: {
     currentTab() { return this.$route.path },
     showTab() {
-      return ['/home', '/scan', '/trend', '/profile'].includes(this.$route.path)
+      return ['/home', '/community', '/scan', '/trend', '/profile'].includes(this.$route.path)
     }
   },
   mounted() {

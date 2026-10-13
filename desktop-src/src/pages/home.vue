@@ -15,6 +15,28 @@
       </view>
     </view>
 
+    <!-- 体重管理方案（薄荷同款：初始 → 已减 → 目标） -->
+    <view class="plan-card" v-if="weightPlan">
+      <view class="plan-head">
+        <text class="plan-title">⚖️ 体重管理方案</text>
+        <text class="plan-goal-tag">目标 {{ weightPlan.target_weight }} kg</text>
+      </view>
+      <view class="plan-nums">
+        <view class="pn-item">
+          <text class="pn-val">{{ weightPlan.start_weight }}</text>
+          <text class="pn-lbl">初始 kg</text>
+        </view>
+        <view class="pn-mid">
+          <text class="pn-lost" :class="{ zero: weightPlan.lost <= 0 }">{{ weightPlan.lost > 0 ? '-' : '' }}{{ weightPlan.lost }}</text>
+          <text class="pn-lbl">已减 kg</text>
+        </view>
+        <view class="pn-item">
+          <text class="pn-val">{{ weightPlan.target_weight }}</text>
+          <text class="pn-lbl">目标 kg</text>
+        </view>
+      </view>
+    </view>
+
     <!-- ============ 热量仪表盘卡（薄荷风：大环 + 四迷你环） ============ -->
     <view class="dash-card">
       <view class="ring-wrap">
@@ -103,6 +125,37 @@
       </view>
     </view>
 
+    <!-- 运动：MET 库快捷记录，消耗参与热量平衡（运动×0.9 抵扣） -->
+    <view class="card ex-card">
+      <view class="card-head">
+        <text class="ch-icon">🏃</text>
+        <text class="ch-title">运动</text>
+        <text class="ch-val orange" v-if="exCal > 0">今日消耗 {{ exCal }} kcal</text>
+      </view>
+      <scroll-view scroll-x class="ex-scroll">
+        <view v-for="e in exLib" :key="e.type"
+              class="ex-chip" :class="{ active: selEx === e.type }"
+              @click="selEx = e.type">
+          <text class="ex-icon">{{ e.icon }}</text>
+          <text class="ex-name">{{ e.type }}</text>
+        </view>
+      </scroll-view>
+      <view class="ex-actions">
+        <view class="ex-btn" @click="quickExercise(15)">15分钟</view>
+        <view class="ex-btn primary" @click="quickExercise(30)">30分钟</view>
+        <view class="ex-btn" @click="quickExercise(60)">60分钟</view>
+      </view>
+      <view class="ex-list" v-if="(summary.exercises || []).length">
+        <view class="ex-item" v-for="e in summary.exercises" :key="e.id">
+          <text class="exi-text">{{ e.icon }} {{ e.type }} {{ e.minutes }}分钟</text>
+          <view class="exi-right">
+            <text class="exi-cal">-{{ e.calories }} kcal</text>
+            <view class="exi-del" @click="delExercise(e)">✕</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <!-- 餐次 -->
     <view class="card meal-card">
       <view class="card-head">
@@ -181,6 +234,7 @@
 
 <script>
 import { request } from '../js/request.js';
+import { EXERCISE_DB } from '../js/mock.js';
 const MEAL_NAMES = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
 const GOAL_NAMES = { lose: '减脂', maintain: '均衡', gain: '增肌' };
 export default {
@@ -198,8 +252,13 @@ export default {
         { key: 'dinner', name: '晚餐', icon: '🌙' },
         { key: 'snack', name: '加餐', icon: '🍪' },
       ],
-      summary: { calories: 0, protein: 0, fat: 0, carbs: 0, water: 0, meals: [] },
+      summary: { calories: 0, protein: 0, fat: 0, carbs: 0, water: 0, exercise_calories: 0, exercises: [], meals: [] },
       target: { calories: 2000, protein: 120, fat: 60, carbs: 260, water: 2000 },
+      // 体重管理方案（初始→已减→目标）
+      weightPlan: null,
+      // 运动：MET 库 + 选中项
+      exLib: EXERCISE_DB,
+      selEx: '快走',
       // 健康评分（{score, grade, logged, items}）与连续打卡（{streak, todayLogged}）
       score: { score: 0, grade: '—', logged: false, items: [] },
       streak: { streak: 0, todayLogged: false },
@@ -214,8 +273,15 @@ export default {
     };
   },
   computed: {
-    remain() { return Math.max(0, this.target.calories - this.summary.calories); },
-    isOver() { return this.summary.calories > this.target.calories; },
+    // 热量平衡（薄荷同款）：还可吃 = 目标 - 摄入 + 运动×0.9（运动返还打九折防"越练越吃"）
+    remain() {
+      return Math.max(0, Math.round(this.target.calories - this.summary.calories + (this.summary.exercise_calories || 0) * 0.9));
+    },
+    isOver() {
+      return this.summary.calories - (this.summary.exercise_calories || 0) * 0.9 > this.target.calories;
+    },
+    // 今日运动总消耗
+    exCal() { return this.summary.exercise_calories || 0; },
     activeTypeName() { return MEAL_NAMES[this.activeType] || ''; },
     filteredMeals() {
       return (this.summary.meals || []).filter(m => m.meal_type === this.activeType);
@@ -290,6 +356,7 @@ export default {
       request({ url: '/api/health-score' }).then(r => { this.score = r; }).catch(() => {});
       request({ url: '/api/streak' }).then(r => { this.streak = r; }).catch(() => {});
       request({ url: '/api/meals/frequent' }).then(r => { this.frequent = r || []; }).catch(() => {});
+      request({ url: '/api/weight/plan' }).then(r => { this.weightPlan = r; }).catch(() => {});
     },
     // 数字滚动动画：从当前值平滑滚到目标值（600ms，缓出）
     animateNumber(key, target) {
@@ -378,6 +445,19 @@ export default {
     },
     // 跳转食谱推荐页
     toRecipes() { uni.navigateTo({ url: '/pages/recipes/recipes' }); },
+    // ===== 运动 =====
+    // 快捷记录：选中的运动 + 指定时长，MET 公式由服务端（mock）按体重折算
+    quickExercise(minutes) {
+      request({ url: '/api/exercises', method: 'POST', data: { type: this.selEx, minutes } }).then(() => {
+        uni.showToast({ title: `已记录${this.selEx}${minutes}分钟`, icon: 'success' });
+        this.loadData();
+      }).catch(() => {
+        uni.showToast({ title: '记录失败，请重试', icon: 'none' });
+      });
+    },
+    delExercise(e) {
+      request({ url: `/api/exercises/${e.id}`, method: 'DELETE' }).then(() => this.loadData());
+    },
     // ===== 编辑记录 =====
     openEdit(m) {
       this.editing = m;
@@ -570,6 +650,38 @@ export default {
 .fab:active { transform: translateX(-50%) scale(0.95); }
 .fab-icon { font-size: 38rpx; margin-right: 12rpx; }
 .fab-text { font-size: 29rpx; font-weight: 700; }
+
+/* ===== 体重管理方案卡（绿系，与薄荷一致的健康感） ===== */
+.plan-card { margin: 22rpx 24rpx -6rpx; background: linear-gradient(135deg, #EAF9F0, #fff); border-radius: 28rpx; padding: 28rpx 30rpx; box-shadow: 0 4rpx 20rpx rgba(34,197,94,0.10); animation: fadeUp .35s ease both; }
+.plan-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18rpx; }
+.plan-title { font-size: 28rpx; font-weight: 800; color: #166534; }
+.plan-goal-tag { font-size: 20rpx; color: #16A34A; background: #D9F5E5; padding: 4rpx 16rpx; border-radius: 20rpx; font-weight: 700; }
+.plan-nums { display: flex; justify-content: space-around; align-items: center; }
+.pn-item { text-align: center; }
+.pn-val { display: block; font-size: 40rpx; font-weight: 800; color: #1a1a1a; }
+.pn-mid { text-align: center; }
+.pn-lost { display: block; font-size: 48rpx; font-weight: 800; color: #16A34A; }
+.pn-lost.zero { color: #9CA3AF; }
+.pn-lbl { display: block; font-size: 20rpx; color: #86A694; margin-top: 4rpx; }
+
+/* ===== 运动卡 ===== */
+.ex-card { animation: fadeUp .5s ease both; }
+.ex-scroll { white-space: nowrap; }
+.ex-chip { display: inline-flex; flex-direction: column; align-items: center; background: var(--bg-input); border-radius: 18rpx; padding: 14rpx 22rpx; margin-right: 14rpx; cursor: pointer; transition: all .15s; }
+.ex-chip.active { background: #FFF0E8; box-shadow: inset 0 0 0 3rpx #FF6B35; }
+.ex-icon { font-size: 30rpx; }
+.ex-name { font-size: 20rpx; color: var(--text-2); margin-top: 4rpx; }
+.ex-chip.active .ex-name { color: #FF6B35; font-weight: 700; }
+.ex-actions { display: flex; gap: 14rpx; margin-top: 20rpx; }
+.ex-btn { flex: 1; text-align: center; padding: 16rpx 0; background: var(--bg-input); color: var(--text-2); border-radius: 40rpx; font-size: 26rpx; font-weight: 700; cursor: pointer; transition: transform .15s; }
+.ex-btn:active { transform: scale(0.95); }
+.ex-btn.primary { background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; }
+.ex-list { margin-top: 18rpx; border-top: 1rpx solid var(--line); padding-top: 8rpx; }
+.ex-item { display: flex; justify-content: space-between; align-items: center; padding: 12rpx 0; }
+.exi-text { font-size: 24rpx; color: var(--text-1); }
+.exi-right { display: flex; align-items: center; gap: 14rpx; }
+.exi-cal { font-size: 24rpx; color: #16A34A; font-weight: 700; }
+.exi-del { font-size: 20rpx; color: var(--text-4); background: var(--bg-input); width: 40rpx; height: 40rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
 /* 卡片渐入动画：自下而上淡入 */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(24rpx); } to { opacity: 1; transform: translateY(0); } }

@@ -7,7 +7,25 @@
           <text class="u-name">{{ user.nickname || user.username }}</text>
           <text class="u-meta">{{ user.gender === 'female' ? '女' : '男' }} · {{ user.age }}岁 · {{ user.height }}cm · {{ user.weight }}kg</text>
         </view>
+        <!-- 积分徽章：对标薄荷的勋章/积分体系 -->
+        <view class="points-badge" v-if="achieve">
+          <text class="pb-star">⭐</text>
+          <text class="pb-val">{{ achieve.points }}</text>
+        </view>
       </view>
+    </view>
+
+    <!-- 成就徽章墙（全部本地规则计算） -->
+    <view class="card achieve-card" v-if="achieve">
+      <view class="card-title">🏅 我的成就 <text class="ac-count">{{ achieve.earnedCount }}/{{ achieve.badges.length }}</text></view>
+      <view class="badge-row">
+        <view class="badge" v-for="b in achieve.badges" :key="b.key" :class="{ earned: b.earned }">
+          <text class="b-icon">{{ b.icon }}</text>
+          <text class="b-name">{{ b.name }}</text>
+          <text class="b-desc">{{ b.desc }}</text>
+        </view>
+      </view>
+      <text class="ac-foot">最长连续打卡 {{ achieve.maxStreak }} 天 · 记录、运动、打卡都能涨积分</text>
     </view>
 
     <!-- 每日目标卡片 -->
@@ -159,6 +177,8 @@ export default {
       // 自定义饮水目标
       useCustomWater: false,
       customWater: 2450,
+      // 成就徽章 + 积分
+      achieve: null,
       // 主题偏好：light/dark/auto
       themePref: 'light',
       themeOptions: [
@@ -194,6 +214,8 @@ export default {
     this.useCustomWater = !!(u.custom_water && u.custom_water >= 500);
     this.customWater = u.custom_water || Math.round((u.weight || 70) * 35);
     this.themePref = (typeof window !== 'undefined' && window.__getThemePref) ? window.__getThemePref() : 'light';
+    // 成就数据独立拉取
+    request({ url: '/api/me/achievements' }).then(r => { this.achieve = r; }).catch(() => {});
   },
   methods: {
     onActivity(e) { this.activityIdx = +e.detail.value; this.form.activity_level = ACTIVITIES[this.activityIdx].key; },
@@ -432,5 +454,20 @@ export default {
 .tt-icon { display: block; font-size: 36rpx; }
 .tt-name { display: block; font-size: 22rpx; color: var(--text-2); margin-top: 6rpx; }
 .theme-tab.active .tt-name { color: #FF6B35; font-weight: 700; }
+
+/* ===== 积分徽章 + 成就墙 ===== */
+.points-badge { margin-left: auto; background: rgba(255,255,255,0.22); border-radius: 40rpx; padding: 8rpx 20rpx; display: flex; align-items: center; gap: 6rpx; }
+.pb-star { font-size: 26rpx; }
+.pb-val { color: #fff; font-size: 28rpx; font-weight: 800; }
+.achieve-card { animation: fadeUp .3s ease both; }
+.ac-count { font-size: 22rpx; color: #FF6B35; font-weight: 700; }
+.badge-row { display: flex; gap: 14rpx; overflow-x: auto; padding-bottom: 6rpx; }
+.badge { flex-shrink: 0; width: 150rpx; text-align: center; background: var(--bg-input); border-radius: 18rpx; padding: 18rpx 8rpx 14rpx; opacity: 0.45; }
+.badge.earned { opacity: 1; background: #FFF8E8; box-shadow: inset 0 0 0 3rpx #F5C542; }
+.b-icon { display: block; font-size: 40rpx; }
+.badge:not(.earned) .b-icon { filter: grayscale(1); }
+.b-name { display: block; font-size: 21rpx; font-weight: 700; color: var(--text-1); margin-top: 6rpx; }
+.b-desc { display: block; font-size: 17rpx; color: var(--text-3); margin-top: 2rpx; }
+.ac-foot { display: block; font-size: 20rpx; color: var(--text-4); margin-top: 14rpx; }
 </style>
 
