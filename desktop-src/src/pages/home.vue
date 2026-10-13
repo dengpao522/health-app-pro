@@ -82,6 +82,15 @@
       </view>
     </view>
 
+    <!-- 轻断食入口（对标薄荷 16:8 主推位） -->
+    <view class="fast-entry" @click="toFasting">
+      <view class="fe-left">
+        <text class="fe-title">⏱️ 轻断食</text>
+        <text class="fe-sub">16:8 限时进食，给身体休息窗口</text>
+      </view>
+      <text class="fe-go">开始 ›</text>
+    </view>
+
     <!-- ============ 常吃食物：彩色 emoji 网格 ============ -->
     <view class="card frequent-card" v-if="frequent.length">
       <view class="card-head">
@@ -445,6 +454,8 @@ export default {
     },
     // 跳转食谱推荐页
     toRecipes() { uni.navigateTo({ url: '/pages/recipes/recipes' }); },
+    // 跳转轻断食计时器
+    toFasting() { uni.navigateTo({ url: '/pages/fasting/fasting' }); },
     // ===== 运动 =====
     // 快捷记录：选中的运动 + 指定时长，MET 公式由服务端（mock）按体重折算
     quickExercise(minutes) {
@@ -585,6 +596,13 @@ export default {
 .rb-title { display: block; color: #fff; font-size: 32rpx; font-weight: 800; }
 .rb-sub { display: block; color: rgba(255,255,255,0.85); font-size: 23rpx; margin-top: 6rpx; }
 .rb-emoji { font-size: 64rpx; }
+
+/* ===== 轻断食入口（绿青色与食谱横幅区分） ===== */
+.fast-entry { margin: 22rpx 24rpx; background: linear-gradient(120deg, #0EA5E9, #0284C7); border-radius: 28rpx; padding: 30rpx 34rpx; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8rpx 24rpx rgba(2,132,199,0.28); cursor: pointer; animation: fadeUp .45s ease both; }
+.fast-entry:active { transform: scale(0.985); }
+.fe-title { display: block; color: #fff; font-size: 32rpx; font-weight: 800; }
+.fe-sub { display: block; color: rgba(255,255,255,0.85); font-size: 22rpx; margin-top: 6rpx; }
+.fe-go { color: #fff; font-size: 26rpx; font-weight: 700; background: rgba(255,255,255,0.2); padding: 10rpx 24rpx; border-radius: 30rpx; }
 
 /* ===== 饮水 ===== */
 .water-card2 { animation: fadeUp .55s ease both; }

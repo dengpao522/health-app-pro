@@ -87,11 +87,11 @@
       <view v-if="searching" class="search-hint">搜索中...</view>
       <view v-if="searchResults.length" class="search-list">
         <view v-for="f in searchResults" :key="f.name" class="s-item" @click="pickSearch(f)">
-          <view class="s-left">
-            <text class="s-name">{{ f.name }}</text>
+          <view class="s-left" @click.stop="viewFoodDetail(f.name)">
+            <text class="s-name">{{ f.name }} <text class="s-detail-hint">详情 ›</text></text>
             <text class="s-cat">{{ f.category }} · {{ f.calories }}kcal/100g</text>
           </view>
-          <text class="s-add">+</text>
+          <text class="s-add" @click.stop="pickSearch(f)">+</text>
         </view>
       </view>
       <view v-if="!searching && keyword && searchResults.length===0 && searched" class="search-hint">没有找到相关食物</view>
@@ -284,6 +284,10 @@ export default {
       this.searchResults = [];
       this.searched = false;
     },
+    // 查看食物详情（评分/NRV/营养点评）
+    viewFoodDetail(name) {
+      uni.navigateTo({ url: '/pages/food-detail/food-detail?name=' + encodeURIComponent(name) });
+    },
     saveAll() {
       const picks = this.selectedItems;
       if (!picks.length || this.saving) return;
@@ -402,6 +406,7 @@ export default {
 .search-hint { text-align: center; color: #aaa; font-size: 24rpx; padding: 16rpx 0; }
 .search-list { margin-top: 16rpx; }
 .s-item { display: flex; justify-content: space-between; align-items: center; padding: 18rpx 0; border-bottom: 1rpx solid #f5f5f5; }
+.s-detail-hint { font-size: 18rpx; color: #8AB4FF; font-weight: 400; }
 .s-name { display: block; font-size: 28rpx; font-weight: 600; color: #333; }
 .s-cat { display: block; font-size: 22rpx; color: #999; margin-top: 4rpx; }
 .s-add { font-size: 40rpx; color: #FF6B35; font-weight: 300; }

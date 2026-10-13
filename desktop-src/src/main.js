@@ -13,6 +13,8 @@ const routes = [
   { path: '/scan', component: () => import('./pages/scan.vue') },
   { path: '/trend', component: () => import('./pages/trend.vue') },
   { path: '/recipes', component: () => import('./pages/recipes.vue') },
+  { path: '/fasting', component: () => import('./pages/fasting.vue') },
+  { path: '/food-detail', component: () => import('./pages/food-detail.vue') },
   { path: '/profile', component: () => import('./pages/profile.vue') },
 ]
 

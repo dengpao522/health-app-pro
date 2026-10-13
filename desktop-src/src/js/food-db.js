@@ -277,3 +277,81 @@ export function toSearchItem(f) {
     serving_hint: '约 ' + f.unit,
   };
 }
+
+// ============================================================
+// 食物健康度评分引擎（对标薄荷的红绿黄分级，纯营养学规则本地计算）
+// 设计：按食物大类用不同评分模板（各类食物"好"的标准不同）：
+//   主食   ：热量30 + 蛋白10 + 纤维20 + 脂肪15 + 钠15 + 糖10
+//   蔬菜水果：热量25 + 纤维30 + 蛋白10 + 脂肪10 + 钠15 + 低卡奖励10
+//   肉蛋   ：热量25 + 蛋白30 + 脂肪25 + 钠20
+//   饮品   ：热量35 + 糖30 + 蛋白10 + 脂肪10 + 钠15（糖水重罚在此生效）
+//   快餐/其他：热量30 + 蛋白15 + 纤维15 + 脂肪20 + 钠20
+// 等级：≥75 绿灯（放心吃）/ 55~74 黄灯（适量）/ <55 红灯（控制频率）
+// ============================================================
+// 线性计分：good≤bad 表示"越低越好"（value≤good 满分）；good>bad 表示"越高越好"（value≥good 满分）
+function lin(value, good, bad, max) {
+  if (good <= bad) {
+    if (value <= good) return max;
+    if (value >= bad) return 0;
+    return max * (bad - value) / (bad - good);
+  }
+  if (value >= good) return max;
+  if (value <= bad) return 0;
+  return max * (value - bad) / (good - bad);
+}
+export function scoreFood(f) {
+  const cat = f.cat;
+  let s = {};
+  if (cat === '肉蛋') {
+    s = {
+      score: Math.round(lin(f.calories, 120, 400, 25) + lin(f.protein, 18, 3, 30) + lin(f.fat, 5, 30, 25) + lin(f.sodium, 100, 1200, 20)),
+      pros: [], cons: [],
+    };
+    if (f.protein >= 18) s.pros.push(`高蛋白（${f.protein}g/100g），增肌饱腹两相宜`);
+    if (f.fat >= 20) s.cons.push(`脂肪偏高（${f.fat}g/100g），建议选瘦肉部位`);
+  } else if (cat === '饮品') {
+    s = {
+      score: Math.round(lin(f.calories, 25, 150, 35) + lin(f.carbs, 3, 11, 30) + lin(f.protein, 3, 0, 10) + lin(f.fat, 2, 10, 10) + lin(f.sodium, 50, 500, 15)),
+      pros: [], cons: [],
+    };
+    // 糖水一票定性：高糖+几乎无蛋白（可乐/奶茶类）直接红灯——空热量饮品是减脂大敌
+    if (f.carbs >= 9 && f.protein < 1) {
+      s.score = Math.min(s.score, 45);
+      s.cons.push('基本是糖水（高糖几乎无蛋白），热量全来自添加糖');
+    }
+    if (f.calories <= 25) s.pros.push('热量很低，日常饮用无负担');
+  } else if (cat === '主食') {
+    s = {
+      // 主食纤维普遍低于蔬果，good 阈值放低（≥1g 即视为有全谷价值）
+      score: Math.round(lin(f.calories, 130, 400, 30) + lin(f.protein, 8, 1, 10) + lin(f.fiber, 1, 0.2, 20) + lin(f.fat, 3, 20, 15) + lin(f.sodium, 150, 1200, 15)),
+      pros: [], cons: [],
+    };
+    if (f.fiber >= 2) s.pros.push(`膳食纤维不错（${f.fiber}g/100g），升糖更平缓`);
+    if (f.calories >= 300) s.cons.push(`热量密度大（${f.calories}kcal/100g），注意分量`);
+  } else if (cat === '蔬菜' || cat === '水果') {
+    s = {
+      // 果蔬蛋白普遍极低，不设蛋白维度；纤维是核心价值（good 阈值放低适配水果）
+      score: Math.round(lin(f.calories, 50, 150, 20) + lin(f.fiber, 1, 0.2, 40) + lin(f.fat, 1, 8, 10) + lin(f.sodium, 100, 800, 15) + (f.calories <= 30 ? 15 : 0)),
+      pros: [], cons: [],
+    };
+    if (f.fiber >= 2) s.pros.push(`膳食纤维丰富（${f.fiber}g/100g）`);
+    if (f.calories <= 30) s.pros.push('低卡高水分，控卡期随便吃');
+  } else {
+    // 快餐 + 其他兜底
+    s = {
+      score: Math.round(lin(f.calories, 200, 500, 30) + lin(f.protein, 12, 2, 15) + lin(f.fiber, 2, 0.3, 15) + lin(f.fat, 15, 30, 20) + lin(f.sodium, 400, 1200, 20)),
+      pros: [], cons: [],
+    };
+    if (f.sodium >= 700) s.cons.push(`钠含量高（${f.sodium}mg/100g），重盐重口味`);
+    if (f.calories >= 300) s.cons.push(`热量密度大（${f.calories}kcal/100g）`);
+  }
+  s.score = Math.max(0, Math.min(100, s.score));
+  s.level = s.score >= 75 ? 'green' : s.score >= 55 ? 'yellow' : 'red';
+  s.levelName = s.level === 'green' ? '绿灯食物' : s.level === 'yellow' ? '黄灯食物' : '红灯食物';
+  s.advice = s.level === 'green'
+    ? '营养构成优秀，日常可以放心吃'
+    : s.level === 'yellow'
+      ? '营养尚可，注意分量，建议搭配绿灯食物一起吃'
+      : '高热量/高油/高糖/高钠，偶尔解馋可以，别经常吃';
+  return s;
+}
