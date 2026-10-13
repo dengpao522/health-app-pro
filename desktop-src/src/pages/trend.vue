@@ -22,6 +22,11 @@
           <text class="rs-lbl">日均蛋白 g</text>
         </view>
       </view>
+      <!-- 运动小结条（上周小结口径）：有运动才显示 -->
+      <view class="ex-summary" v-if="report && report.exercise_minutes > 0">
+        <text class="exs-icon">🏃</text>
+        <text class="exs-text">本周运动 {{ report.exercise_days }} 天 · {{ report.exercise_minutes }} 分钟 · 消耗 {{ report.exercise_calories }} kcal</text>
+      </view>
       <view class="report-insights" v-if="report && report.insights.length">
         <view class="insight-item" v-for="(line, i) in report.insights" :key="i">
           <text class="insight-dot">💡</text>
@@ -234,6 +239,10 @@ export default {
 .rs-item.highlight-p .rs-val { color: #16A34A; }
 .rs-unit { font-size: 22rpx; font-weight: 400; color: #bbb; }
 .rs-lbl { display: block; font-size: 22rpx; color: #999; margin-top: 4rpx; }
+/* 运动小结条：绿系轻量条 */
+.ex-summary { display: flex; align-items: center; gap: 12rpx; background: #EAF9F0; border-radius: 16rpx; padding: 14rpx 20rpx; margin-bottom: 16rpx; }
+.exs-icon { font-size: 26rpx; }
+.exs-text { font-size: 22rpx; color: #166534; font-weight: 600; }
 .report-insights { display: flex; flex-direction: column; gap: 12rpx; }
 .insight-item { display: flex; gap: 12rpx; align-items: flex-start; }
 .insight-dot { font-size: 24rpx; flex-shrink: 0; margin-top: 2rpx; }

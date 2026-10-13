@@ -618,15 +618,18 @@ export function mockRequest(method, url, data) {
     const tg = calcTargets(user);
     const weightMap = {};
     (db.weights[uid] || []).forEach(w => { weightMap[w.date] = w.weight; });
-    // 逐日聚合：是否记录 / 热量 / 蛋白质 / 钠 / 体重
+    // 逐日聚合：是否记录 / 热量 / 蛋白质 / 钠 / 体重 / 运动消耗
     const perDay = days.map(d => {
       const list = (db.meals[uid] || []).filter(m => m.date === d);
+      const exs = (db.exercises[uid] || []).filter(e => e.date === d);
       return {
         date: d, logged: list.length > 0,
         calories: list.reduce((s, m) => s + (m.calories || 0), 0),
         protein: list.reduce((s, m) => s + (m.protein || 0), 0),
         sodium: list.reduce((s, m) => s + (m.sodium || 0), 0),
         weight: weightMap[d] || null,
+        exCalories: exs.reduce((s, e) => s + (e.calories || 0), 0),
+        exMinutes: exs.reduce((s, e) => s + (e.minutes || 0), 0),
       };
     });
     const loggedArr = perDay.filter(d => d.logged);
@@ -634,6 +637,10 @@ export function mockRequest(method, url, data) {
     const avgCal = Math.round(avg('calories'));
     const avgPro = Math.round(avg('protein'));
     const sodiumOverDays = loggedArr.filter(d => d.sodium > 2000).length;
+    // 运动周汇总
+    const totalExMin = perDay.reduce((s, d) => s + d.exMinutes, 0);
+    const totalExCal = perDay.reduce((s, d) => s + d.exCalories, 0);
+    const exDays = perDay.filter(d => d.exMinutes > 0).length;
     // 体重变化：取最近两次记录的差值
     const ws = (db.weights[uid] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
     const weightChange = ws.length >= 2 ? +(ws[ws.length - 1].weight - ws[0].weight).toFixed(1) : null;
@@ -659,6 +666,13 @@ export function mockRequest(method, url, data) {
       // 钠
       if (sodiumOverDays >= 4) insights.push(`有 ${sodiumOverDays} 天钠摄入超过 2000mg，重口味是水肿和血压的元凶，试试少放半勺盐`);
       else if (sodiumOverDays >= 1) insights.push(`有 ${sodiumOverDays} 天钠略超标，问题不大，酱料能少则少`);
+      // 运动（上周小结口径：总时长/次数/建议）
+      if (totalExMin > 0) {
+        if (exDays >= 3) insights.push(`本周运动 ${exDays} 天共 ${totalExMin} 分钟，消耗约 ${totalExCal} kcal，运动量很到位`);
+        else insights.push(`本周运动 ${exDays} 天共 ${totalExMin} 分钟，建议每周至少 3 次中等强度运动`);
+      } else if (loggedArr.length >= 3) {
+        insights.push('本周还没有运动记录，从每天快走 15 分钟开始，消耗会自动抵扣热量');
+      }
       // 体重方向与目标的一致性
       if (weightChange !== null && weightChange !== 0) {
         const txt = weightChange < 0 ? `体重下降 ${Math.abs(weightChange)} kg` : `体重上升 ${weightChange} kg`;
@@ -678,6 +692,7 @@ export function mockRequest(method, url, data) {
       avg_calories: avgCal, target_calories: tg.target_calories,
       avg_protein: avgPro, target_protein: tg.target_protein,
       sodium_over_days: sodiumOverDays,
+      exercise_minutes: totalExMin, exercise_days: exDays, exercise_calories: totalExCal,
       weight_change: weightChange,
       insights,
     };
