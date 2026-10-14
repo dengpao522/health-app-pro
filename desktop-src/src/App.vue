@@ -59,9 +59,29 @@ export default {
       this.theme = resolveTheme();
     };
     window.__getThemePref = () => localStorage.getItem(THEME_KEY) || 'light';
+    // 饮水提醒：浏览器单页应用内定时器（非 Worker 环境，可安全使用）
+    this.startWaterReminder();
   },
   methods: {
     applyTheme() { this.theme = resolveTheme(); },
+    // ===== 饮水提醒（我的页设置开关） =====
+    // 偏好存 localStorage：{ on: bool, interval: 分钟 }
+    // 提醒窗口 8:00~22:00，上次提醒时间也持久化，刷新页面不会重复轰炸
+    startWaterReminder() {
+      const PREF_KEY = 'health_pro_water_remind';
+      const LAST_KEY = 'health_pro_water_last';
+      setInterval(() => {
+        let pref = null;
+        try { pref = JSON.parse(localStorage.getItem(PREF_KEY)); } catch (e) {}
+        if (!pref || !pref.on) return;
+        const h = new Date().getHours();
+        if (h < 8 || h >= 22) return; // 夜间不打扰
+        const last = +(localStorage.getItem(LAST_KEY) || 0);
+        if (Date.now() - last < pref.interval * 60000) return;
+        localStorage.setItem(LAST_KEY, String(Date.now()));
+        uni.showToast({ title: '💧 该喝水啦，起身接杯水吧', icon: 'none', duration: 3000 });
+      }, 30000); // 每 30 秒自检一次，足够精确且开销可忽略
+    },
   }
 }
 </script>

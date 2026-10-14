@@ -7,7 +7,7 @@
 
     <!-- 每周营养报告：数据+文案全部由本地规则引擎生成，零服务器成本 -->
     <view class="card report-card">
-      <view class="card-title">📄 每周营养报告</view>
+      <view class="card-title">📄 每周营养报告 <text class="share-btn" @click="makeShare">📸 生成分享图</text></view>
       <view class="report-summary" v-if="report">
         <view class="rs-item">
           <text class="rs-val">{{ report.logged_days }}<text class="rs-unit">/7</text></text>
@@ -89,13 +89,26 @@
     </view>
 
     <view style="height: 40rpx;"></view>
+
+    <!-- 周报分享图：隐藏的高清画布（375x540 显示 / 750x1080 绘制）+ 预览弹窗 -->
+    <canvas class="share-canvas" canvas-id="sharePoster" width="750" height="1080"></canvas>
+    <view class="share-mask" v-if="shareUrl" @click.self="shareUrl = ''">
+      <view class="share-dialog">
+        <text class="sh-title">长按或下载保存，晒出你的健康周报</text>
+        <img :src="shareUrl" class="sh-img" alt="健康周报分享图" />
+        <view class="sh-btns">
+          <view class="sh-btn ghost" @click="shareUrl = ''">关闭</view>
+          <view class="sh-btn ok" @click="downloadShare">下载图片</view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script>
 import { request } from '../js/request.js';
 export default {
-  data() { return { days: 7, points: [], targetCal: 2000, report: null, cal: null, calMonth: '' }; },
+  data() { return { days: 7, points: [], targetCal: 2000, report: null, cal: null, calMonth: '', shareUrl: '' }; },
   computed: {
     // 当前自然月（YYYY-MM），用于限制翻页上限
     thisMonth() {
@@ -174,6 +187,110 @@ export default {
     // 点已记录日期 → 历史页回看那天（query 由 polyfill 透传）
     goDay(date) {
       uni.navigateTo({ url: '/pages/history/history?date=' + date });
+    },
+    // ===== 周报分享图 =====
+    // 文本自动换行：按宽度切断，返回实际行数（canvas 不支持自动换行）
+    wrapText(ctx, text, x, y, maxW, lineH, maxLines) {
+      let line = '', rows = 0;
+      for (const ch of String(text)) {
+        if (ctx.measureText(line + ch).width > maxW) {
+          ctx.fillText(line, x, y + rows * lineH);
+          rows += 1; line = ch;
+          if (rows >= maxLines) { line += '…'; break; }
+        } else line += ch;
+      }
+      if (line && rows < maxLines) ctx.fillText(line, x, y + rows * lineH);
+      return rows + (line ? 1 : 0);
+    },
+    makeShare() {
+      if (!this.report) { uni.showToast({ title: '报告数据还没加载好', icon: 'none' }); return; }
+      const r = this.report;
+      const el = this.$el.querySelector('canvas[canvas-id="sharePoster"]');
+      if (!el) return;
+      // 直接用原生 2D 上下文按 750x1080 绘制（高分屏导出更清晰）
+      el.width = 750; el.height = 1080;
+      const ctx = el.getContext('2d');
+      // 背景：奶油白
+      ctx.fillStyle = '#FFFAF7';
+      ctx.fillRect(0, 0, 750, 1080);
+      // 头部横幅：品牌橙渐变
+      const grad = ctx.createLinearGradient(0, 0, 750, 200);
+      grad.addColorStop(0, '#FF7A45'); grad.addColorStop(1, '#FF5E3A');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 750, 200);
+      ctx.fillStyle = '#fff';
+      ctx.font = '800 52px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('我的健康周报', 375, 92);
+      ctx.font = '26px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText((r.start || '').slice(5).replace('-', '.') + ' - ' + (r.end || '').slice(5).replace('-', '.'), 375, 140);
+      // 四格数据：记录天数 / 日均热量 / 日均蛋白 / 运动消耗
+      const stats = [
+        { val: r.logged_days + '/7', lbl: '记录天数' },
+        { val: r.avg_calories, lbl: '日均热量' },
+        { val: r.avg_protein + 'g', lbl: '日均蛋白' },
+        { val: r.exercise_calories, lbl: '运动消耗' },
+      ];
+      stats.forEach((s, i) => {
+        const cx = 94 + i * 188;
+        ctx.fillStyle = '#FF6B35';
+        ctx.font = '800 44px sans-serif';
+        ctx.fillText(s.val, cx, 296);
+        ctx.fillStyle = '#999';
+        ctx.font = '24px sans-serif';
+        ctx.fillText(s.lbl, cx, 336);
+      });
+      // 分隔线
+      ctx.strokeStyle = '#FFE3D6'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(60, 380); ctx.lineTo(690, 380); ctx.stroke();
+      // 运动/睡眠小结条
+      let y = 428;
+      ctx.textAlign = 'left';
+      const pill = (icon, txt) => {
+        ctx.fillStyle = '#FFF1EA';
+        ctx.fillRect(60, y - 34, 630, 62);
+        ctx.fillStyle = '#FF6B35'; ctx.font = '28px sans-serif';
+        ctx.fillText(icon, 80, y + 6);
+        ctx.fillStyle = '#C2553A'; ctx.font = '600 26px sans-serif';
+        ctx.fillText(txt, 122, y + 6);
+        y += 88;
+      };
+      if (r.exercise_minutes > 0) pill('🏃', `本周运动 ${r.exercise_days} 天 · ${r.exercise_minutes} 分钟`);
+      if (r.avg_sleep) pill('😴', `本周平均睡眠 ${r.avg_sleep} 小时（${r.sleep_days} 天有记录）`);
+      if (r.weight_change !== null && r.weight_change !== 0) {
+        pill('⚖️', r.weight_change < 0 ? `体重下降 ${Math.abs(r.weight_change)} kg` : `体重上升 ${r.weight_change} kg`);
+      }
+      // 洞察列表：最多 3 条，每条最多 2 行
+      ctx.fillStyle = '#333';
+      ctx.font = '800 32px sans-serif';
+      ctx.fillText('💡 本周洞察', 60, y + 8);
+      y += 58;
+      ctx.font = '25px sans-serif';
+      (r.insights || []).slice(0, 3).forEach((line) => {
+        ctx.fillStyle = '#FFB088';
+        ctx.beginPath(); ctx.arc(70, y - 8, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#666';
+        const rows = this.wrapText(ctx, line, 94, y, 560, 38, 2);
+        y += rows * 38 + 18;
+      });
+      // 页脚品牌
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#bbb';
+      ctx.font = '600 24px sans-serif';
+      ctx.fillText('健康饮食助手 · 让记录改变习惯', 375, 1040);
+      // 导出为 PNG 弹出预览
+      this.shareUrl = el.toDataURL('image/png');
+    },
+    // 下载分享图：浏览器 <a download>（WebView 内长按图片也可保存）
+    downloadShare() {
+      const a = document.createElement('a');
+      a.href = this.shareUrl;
+      a.download = '健康周报_' + (this.report ? this.report.end : '').replace(/-/g, '') + '.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      uni.showToast({ title: '已开始下载', icon: 'success' });
     },
     drawCal() {
       const ctx = this.getCtx('calChart');
@@ -360,6 +477,19 @@ export default {
 .cd-num { font-size: 24rpx; font-weight: 700; color: var(--text-1); line-height: 1.1; }
 .cd-dot { width: 8rpx; height: 8rpx; border-radius: 50%; background: #16A34A; margin-top: 4rpx; }
 .cal-tip { display: block; text-align: center; font-size: 19rpx; color: var(--text-4); margin-top: 16rpx; }
+
+/* ===== 周报分享图 ===== */
+.share-btn { float: right; font-size: 22rpx; color: #FF6B35; font-weight: 700; background: rgba(255,107,53,0.10); padding: 6rpx 20rpx; border-radius: 24rpx; cursor: pointer; }
+/* 海报画布本体藏到屏幕外（仅用于绘制导出，不参与页面布局） */
+.share-canvas { position: fixed; left: -9999px; top: 0; width: 375px; height: 540px; }
+.share-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.share-dialog { width: 74%; max-width: 340px; background: var(--bg-card); border-radius: 28rpx; padding: 30rpx 26rpx; }
+.sh-title { display: block; text-align: center; font-size: 25rpx; font-weight: 700; color: var(--text-1); margin-bottom: 20rpx; }
+.sh-img { display: block; width: 100%; border-radius: 16rpx; box-shadow: 0 6rpx 24rpx rgba(0,0,0,0.15); }
+.sh-btns { display: flex; gap: 16rpx; margin-top: 24rpx; }
+.sh-btn { flex: 1; text-align: center; padding: 18rpx 0; border-radius: 40rpx; font-size: 27rpx; font-weight: 700; cursor: pointer; }
+.sh-btn.ghost { background: var(--bg-input); color: var(--text-2); }
+.sh-btn.ok { background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; }
 .report-insights { display: flex; flex-direction: column; gap: 12rpx; }
 .insight-item { display: flex; gap: 12rpx; align-items: flex-start; }
 .insight-dot { font-size: 24rpx; flex-shrink: 0; margin-top: 2rpx; }

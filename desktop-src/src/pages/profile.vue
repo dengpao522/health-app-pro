@@ -116,6 +116,23 @@
           <text class="cc-hint">范围 500~10000 ml，开启后立即生效</text>
         </view>
       </view>
+      <!-- 饮水提醒：定时弹 toast 提醒喝水（8:00~22:00 生效） -->
+      <view class="custom-cal">
+        <view class="cc-head">
+          <text class="cc-title">⏰ 饮水提醒</text>
+          <view class="cc-switch" :class="{ on: remindOn }" @click="toggleRemind">
+            <view class="cc-knob"></view>
+          </view>
+        </view>
+        <view class="cc-body" v-if="remindOn">
+          <view class="remind-seg">
+            <view v-for="opt in remindOptions" :key="opt.value"
+                  class="rs-opt" :class="{ active: remindInterval === opt.value }"
+                  @click="setRemindInterval(opt.value)">{{ opt.label }}</view>
+          </view>
+          <text class="cc-hint">每天 8:00~22:00 按间隔提醒，夜间不打扰</text>
+        </view>
+      </view>
     </view>
 
     <!-- 记录体重 -->
@@ -195,6 +212,14 @@ export default {
         { value: 'dark', icon: '🌙', name: '深色' },
         { value: 'auto', icon: '🌗', name: '跟随系统' },
       ],
+      // 饮水提醒：开关 + 间隔（App.vue 全局定时器按此偏好弹提醒）
+      remindOn: false,
+      remindInterval: 60,
+      remindOptions: [
+        { value: 30, label: '30分钟' },
+        { value: 60, label: '1小时' },
+        { value: 90, label: '1.5小时' },
+      ],
     };
   },
   computed: {
@@ -223,6 +248,11 @@ export default {
     this.useCustomWater = !!(u.custom_water && u.custom_water >= 500);
     this.customWater = u.custom_water || Math.round((u.weight || 70) * 35);
     this.themePref = (typeof window !== 'undefined' && window.__getThemePref) ? window.__getThemePref() : 'light';
+    // 恢复饮水提醒偏好
+    try {
+      const pref = JSON.parse(localStorage.getItem('health_pro_water_remind'));
+      if (pref && pref.on) { this.remindOn = true; this.remindInterval = pref.interval || 60; }
+    } catch (e) {}
     // 成就数据独立拉取
     request({ url: '/api/me/achievements' }).then(r => { this.achieve = r; }).catch(() => {});
   },
@@ -280,6 +310,21 @@ export default {
     setTheme(value) {
       this.themePref = value;
       if (typeof window !== 'undefined' && window.__setTheme) window.__setTheme(value);
+    },
+    // ===== 饮水提醒：偏好写入 localStorage，App.vue 定时器实时读取 =====
+    toggleRemind() {
+      this.remindOn = !this.remindOn;
+      this.saveRemindPref();
+    },
+    setRemindInterval(value) {
+      this.remindInterval = value;
+      this.saveRemindPref();
+    },
+    saveRemindPref() {
+      localStorage.setItem('health_pro_water_remind', JSON.stringify({ on: this.remindOn, interval: this.remindInterval }));
+      // 重置上次提醒时间：开启/改间隔后按新节奏走
+      localStorage.setItem('health_pro_water_last', String(Date.now()));
+      uni.showToast({ title: this.remindOn ? `已开启，每 ${this.remindInterval} 分钟提醒` : '已关闭提醒', icon: 'none' });
     },
     // ===== 数据备份 =====
     // 导出：拉整库 JSON，用浏览器下载能力存为 .json 文件
@@ -457,6 +502,11 @@ export default {
 .cc-hint { display: block; font-size: 20rpx; color: var(--text-4); margin-top: 14rpx; }
 /* 饮水输入的青蓝主题色（与热量橙色区分） */
 .cc-input.water { color: #3D9BFF; background: rgba(61,155,255,0.12); }
+
+/* ===== 饮水提醒间隔选择 ===== */
+.remind-seg { display: flex; gap: 12rpx; }
+.rs-opt { flex: 1; text-align: center; padding: 16rpx 0; background: var(--bg-input); border-radius: 14rpx; font-size: 25rpx; color: var(--text-2); cursor: pointer; }
+.rs-opt.active { background: rgba(61,155,255,0.14); color: #3D9BFF; font-weight: 700; box-shadow: inset 0 0 0 3rpx #3D9BFF; }
 
 /* ===== 数据备份 ===== */
 .backup-card { margin: 20rpx 24rpx; }
