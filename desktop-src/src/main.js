@@ -16,6 +16,8 @@ const routes = [
   { path: '/fasting', component: () => import('./pages/fasting.vue') },
   { path: '/food-detail', component: () => import('./pages/food-detail.vue') },
   { path: '/history', component: () => import('./pages/history.vue') },
+  { path: '/tools', component: () => import('./pages/tools.vue') },
+  { path: '/period', component: () => import('./pages/period.vue') },
   { path: '/profile', component: () => import('./pages/profile.vue') },
 ]
 

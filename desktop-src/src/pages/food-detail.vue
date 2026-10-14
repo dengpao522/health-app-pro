@@ -4,6 +4,7 @@
       <view class="nav-row">
         <text class="back" @click="goBack">‹</text>
         <text class="page-title">食物详情</text>
+        <text class="cmp-btn" @click="startCompare">{{ compareWith ? '退出对比' : '⚖️ 对比' }}</text>
       </view>
       <text class="food-name">{{ food.name }}</text>
       <view class="score-row">
@@ -16,6 +17,46 @@
           <text class="sc-advice">{{ score.advice }}</text>
         </view>
       </view>
+    </view>
+
+    <!-- 对比模式：搜索另一个食物 → 显示六项营养对比条 -->
+    <view class="card cmp-card" v-if="comparing">
+      <view class="card-title">⚖️ 选择对比食物</view>
+      <view class="cmp-search">
+        <input v-model="compareKw" placeholder="输入食物名，如：糙米饭" @input="onCmpInput" />
+      </view>
+      <view class="cmp-list" v-if="cmpResults.length">
+        <view v-for="f in cmpResults" :key="f.name" class="cmp-item" @click="pickCompare(f)">
+          <text class="ci-name">{{ f.name }}</text>
+          <text class="ci-cat">{{ f.cat }} · {{ f.calories }}kcal/100g</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 对比结果：两列头部 + 六项营养归一化对比条 -->
+    <view class="card cmp-result" v-if="compareWith">
+      <view class="cr-head">
+        <view class="cr-side">
+          <text class="cr-name">{{ food.name }}</text>
+          <view class="cr-score" :class="score.level">{{ score.score }}</view>
+        </view>
+        <text class="cr-vs">VS</text>
+        <view class="cr-side">
+          <text class="cr-name">{{ compareWith.name }}</text>
+          <view class="cr-score" :class="cmpScore.level">{{ cmpScore.score }}</view>
+        </view>
+      </view>
+      <view class="cr-row" v-for="row in cmpRows" :key="row.name">
+        <text class="cr-lbl">{{ row.name }}</text>
+        <view class="cr-bars">
+          <view class="cr-bar a" :style="{ width: row.pctA + '%' }"></view>
+          <text class="cr-val">{{ row.valA }}</text>
+          <view class="cr-bar b" :style="{ width: row.pctB + '%' }"></view>
+          <text class="cr-val b">{{ row.valB }}</text>
+        </view>
+      </view>
+      <text class="cr-note">两列均为每{{ food.unit }}含量；条长按两者中较大值归一化，谁的条长谁含量高</text>
+      <view class="cr-verdict" v-if="cmpVerdict">{{ cmpVerdict }}</view>
     </view>
 
     <!-- 核心营养素（每100g/100ml可食部分） -->
@@ -85,7 +126,7 @@
 </template>
 
 <script>
-import { FOOD_DB_EXTENDED, scoreFood } from '../js/food-db.js';
+import { FOOD_DB_EXTENDED, scoreFood, searchFood } from '../js/food-db.js';
 import { request } from '../js/request.js';
 
 // NRV 基准值（GB 28050 国标）：热量 8400kJ≈2000kcal、蛋白 60g、脂肪 60g、碳水 300g、钠 2000mg
@@ -93,10 +134,47 @@ const NRV = { calories: 2000, protein: 60, fat: 60, carbs: 300, sodium: 2000 };
 
 export default {
   data() {
-    return { food: { name: '', cat: '', calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 0, sodium: 0, unit: '100g' } };
+    return {
+      food: { name: '', cat: '', calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 0, sodium: 0, unit: '100g' },
+      // 对比模式状态：comparing=显示搜索框；compareWith=已选对比食物
+      comparing: false,
+      compareWith: null,
+      compareKw: '',
+      cmpResults: [],
+    };
   },
   computed: {
     score() { return scoreFood(this.food); },
+    // 对比食物的评分（未选时给空对象避免模板报错）
+    cmpScore() { return this.compareWith ? scoreFood(this.compareWith) : { score: 0, level: 'green' }; },
+    // 六项营养归一化对比行：条长按两者较大值归一（较大=100%）
+    cmpRows() {
+      if (!this.compareWith) return [];
+      const a = this.food, b = this.compareWith;
+      const defs = [
+        { name: '热量 kcal', key: 'calories' },
+        { name: '蛋白质 g', key: 'protein' },
+        { name: '脂肪 g', key: 'fat' },
+        { name: '碳水 g', key: 'carbs' },
+        { name: '膳食纤维 g', key: 'fiber' },
+        { name: '钠 mg', key: 'sodium' },
+      ];
+      return defs.map(d => {
+        const va = +(a[d.key] || 0), vb = +(b[d.key] || 0);
+        const mx = Math.max(va, vb, 0.0001);
+        return { name: d.name, valA: va, valB: vb, pctA: Math.round(va / mx * 100), pctB: Math.round(vb / mx * 100) };
+      });
+    },
+    // 一句话结论：综合评分谁高推荐谁，同分则并列
+    cmpVerdict() {
+      if (!this.compareWith) return '';
+      const sa = this.score.score, sb = this.cmpScore.score;
+      if (Math.abs(sa - sb) < 3) return `两者评分接近（${sa} vs ${sb}），按口味选择即可，注意分量`;
+      const win = sa > sb ? this.food : this.compareWith;
+      const lose = sa > sb ? this.compareWith : this.food;
+      return `综合来看「${win.name}」营养构成更好（${Math.max(sa, sb)} vs ${Math.min(sa, sb)} 分），「${lose.name}」注意控制频率和分量`;
+    },
+    // NRV 每日推荐量占比（GB 28050 基准）
     nrvList() {
       const f = this.food;
       return [
@@ -116,6 +194,28 @@ export default {
   },
   methods: {
     goBack() { uni.navigateBack(); },
+    // ===== 食物对比 =====
+    startCompare() {
+      // 再点一次（或已选食物后）退出对比并清状态
+      if (this.comparing || this.compareWith) {
+        this.comparing = false; this.compareWith = null; this.compareKw = ''; this.cmpResults = [];
+        return;
+      }
+      this.comparing = true;
+    },
+    // 输入防抖 250ms 搜索食物库（与 scan 页搜索同一数据源）
+    onCmpInput() {
+      clearTimeout(this._cmpTimer);
+      this._cmpTimer = setTimeout(() => {
+        this.cmpResults = searchFood(this.compareKw, 8);
+      }, 250);
+    },
+    pickCompare(f) {
+      this.compareWith = f;
+      this.comparing = false;
+      this.cmpResults = [];
+      this.compareKw = '';
+    },
     // 快捷记录一份（100g/100ml）到当前时段餐次
     async quickAdd() {
       // 时段归餐次：5~10早餐 / 10~14午餐 / 14~18加餐 / 18~21晚餐 / 凌晨深夜归加餐
@@ -186,4 +286,35 @@ export default {
 
 .quick-btn { margin: 30rpx 24rpx 0; background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; border: none; border-radius: 24rpx; height: 92rpx; line-height: 92rpx; font-size: 32rpx; font-weight: 700; box-shadow: 0 8rpx 24rpx rgba(255,94,58,0.3); }
 .quick-btn:active { transform: scale(0.98); }
+
+/* ===== 食物对比 ===== */
+.cmp-btn { margin-left: auto; font-size: 24rpx; font-weight: 700; background: rgba(255,255,255,0.22); padding: 8rpx 22rpx; border-radius: 28rpx; cursor: pointer; }
+.cmp-search { background: var(--bg-input); border-radius: 30rpx; padding: 0 24rpx; height: 72rpx; display: flex; align-items: center; }
+.cmp-search input { flex: 1; font-size: 28rpx; color: var(--text-1); }
+.cmp-item { padding: 18rpx 0; border-bottom: 1rpx solid var(--line); cursor: pointer; }
+.cmp-item:last-child { border-bottom: none; }
+.ci-name { display: block; font-size: 28rpx; font-weight: 600; color: var(--text-1); }
+.ci-cat { display: block; font-size: 22rpx; color: var(--text-3); margin-top: 4rpx; }
+
+/* 对比结果：头部两列 + VS */
+.cr-head { display: flex; align-items: center; margin-bottom: 24rpx; }
+.cr-side { flex: 1; text-align: center; }
+.cr-name { display: block; font-size: 28rpx; font-weight: 700; color: var(--text-1); margin-bottom: 10rpx; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-score { width: 84rpx; height: 84rpx; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 34rpx; font-weight: 800; color: #fff; }
+.cr-score.green { background: linear-gradient(135deg, #34C77B, #16A34A); }
+.cr-score.yellow { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.cr-score.red { background: linear-gradient(135deg, #F87171, #DC2626); }
+.cr-vs { font-size: 26rpx; font-weight: 800; color: var(--text-4); padding: 0 20rpx; }
+/* 对比条行：A 橙（当前食物）/ B 蓝（对比食物） */
+.cr-row { display: flex; align-items: center; gap: 14rpx; margin-bottom: 14rpx; }
+.cr-lbl { width: 130rpx; font-size: 22rpx; color: var(--text-2); flex-shrink: 0; }
+.cr-bars { flex: 1; display: flex; align-items: center; gap: 8rpx; }
+.cr-bar { height: 18rpx; border-radius: 9rpx; min-width: 6rpx; }
+.cr-bar.a { background: linear-gradient(90deg, #FF7A45, #FF5E3A); }
+.cr-bar.b { background: linear-gradient(90deg, #60A5FA, #3B82F6); }
+.cr-val { font-size: 21rpx; font-weight: 700; color: #FF6B35; width: 64rpx; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.cr-val.b { color: #3B82F6; }
+.cr-note { display: block; font-size: 19rpx; color: var(--text-4); margin-top: 10rpx; line-height: 1.6; }
+/* 结论条：绿底绿字，一眼看到推荐 */
+.cr-verdict { margin-top: 18rpx; background: rgba(34,197,94,0.10); border-radius: 16rpx; padding: 18rpx 22rpx; font-size: 24rpx; color: #16A34A; font-weight: 600; line-height: 1.7; }
 </style>

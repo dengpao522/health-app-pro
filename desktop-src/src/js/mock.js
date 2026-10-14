@@ -33,6 +33,8 @@ function loadDB() {
   if (!db.exercises) { db.exercises = {}; changed = true; }
   // 旧版本库升级：补睡眠记录表（对标薄荷的睡眠打卡）
   if (!db.sleeps) { db.sleeps = {}; changed = true; }
+  // 旧版本库升级：补生理期记录表（女性健康）
+  if (!db.periods) { db.periods = {}; changed = true; }
   // 老用户升级到新版时也补上演示账号（demo / 123456），不影响其已有账号
   if (!Object.values(db.users).some(u => u.username === 'demo')) {
     seedDemo(db);
@@ -515,7 +517,7 @@ export function mockRequest(method, url, data) {
   // 无需单独维护数据：每次请求时从全部餐食历史实时聚合，天然与记录同步
   if (url === '/api/meals/frequent' && method === 'GET') {
     // 分类 → 图标映射：让常吃卡片有彩色 emoji 视觉锚点
-    const CAT_EMOJI = { '主食': '🍚', '肉蛋': '🥩', '蔬菜': '🥬', '水果': '🍎', '饮品': '🥛', '快餐': '🍔', '其他': '🍽️' };
+    const CAT_EMOJI = { '主食': '🍚', '肉蛋': '🥩', '蔬菜': '🥬', '水果': '🍎', '饮品': '🥛', '快餐': '🍔', '坚果': '🥜', '其他': '🍽️' };
     const byName = Object.fromEntries(FOOD_DB.map(f => [f.name, f]));
     const counter = {};
     (db.meals[uid] || []).forEach(m => {
@@ -850,6 +852,75 @@ export function mockRequest(method, url, data) {
     };
   }
 
+  // ============ 打卡日历（月视图：每天是否有饮食记录，趋势页渲染热力格） ============
+  if (url === '/api/calendar' && method === 'GET') {
+    const month = /^\d{4}-\d{2}$/.test(data.month) ? data.month : todayStr().slice(0, 7);
+    const days = {};
+    let loggedCount = 0;
+    (db.meals[uid] || []).forEach(m => {
+      if (!m.date || !m.date.startsWith(month)) return;
+      if (!days[m.date]) { days[m.date] = { logged: true, meals: 0 }; loggedCount += 1; }
+      days[m.date].meals += 1;
+    });
+    return { month, days, logged_count: loggedCount, today: todayStr() };
+  }
+
+  // ============ 生理期记录（女性健康：经期起止 → 周期规律 + 下次预测） ============
+  if (url === '/api/period' && method === 'POST') {
+    if (!db.periods) db.periods = {};
+    const start = String(data.start || ''), end = String(data.end || '');
+    const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
+    // 日期合法性：开始≤今天、结束≥开始、经期长度 1~14 天
+    if (!isDate(start) || !isDate(end) || start > todayStr()) {
+      return { __status: 400, detail: '日期不合法，且不能记录未来日期' };
+    }
+    if (end < start) return { __status: 400, detail: '结束日期不能早于开始日期' };
+    const dur = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+    if (dur > 14) return { __status: 400, detail: '经期长度超过 14 天，请核对日期；异常出血请及时就医' };
+    const list = db.periods[uid] = (db.periods[uid] || []).filter(p => p.start !== start);
+    list.push({ id: Date.now(), start, end, days: dur });
+    list.sort((a, b) => (a.start < b.start ? -1 : 1));
+    // 只保留最近 24 条（两年），控制 localStorage 体积
+    db.periods[uid] = list.slice(-24);
+    saveDB(db);
+    return { message: 'ok' };
+  }
+  if (url === '/api/period' && method === 'GET') {
+    const list = (db.periods[uid] || []).slice().sort((a, b) => (a.start < b.start ? -1 : 1));
+    const today = todayStr();
+    // 周期序列：相邻两次开始日的间隔天数
+    const cycles = [];
+    for (let i = 1; i < list.length; i++) {
+      const d = Math.round((new Date(list[i].start) - new Date(list[i - 1].start)) / 86400000);
+      if (d >= 15 && d <= 60) cycles.push(d); // 剔除明显漏记的异常间隔
+    }
+    // 平均周期：有记录用均值（近6次），无记录用标准 28 天
+    const recent = cycles.slice(-6);
+    const avgCycle = recent.length ? Math.round(recent.reduce((s, x) => s + x, 0) / recent.length) : 28;
+    const latest = list.length ? list[list.length - 1] : null;
+    let inPeriod = false, nextStart = null, daysUntil = null, dayNo = null;
+    if (latest) {
+      inPeriod = today >= latest.start && today <= latest.end;
+      nextStart = fmtDate(new Date(new Date(latest.start).getTime() + avgCycle * 86400000));
+      daysUntil = Math.round((new Date(nextStart) - new Date(today)) / 86400000);
+      dayNo = Math.round((new Date(today) - new Date(latest.start)) / 86400000) + 1; // 本周期第几天
+    }
+    return {
+      records: list.slice(-12).reverse(),
+      latest, in_period: inPeriod, avg_cycle: avgCycle,
+      next_start: nextStart, days_until: daysUntil, cycle_day: dayNo,
+    };
+  }
+  // 删除生理期记录（记错日期时用）
+  const periodDel = url.match(/^\/api\/period\/(\d+)$/);
+  if (periodDel && method === 'DELETE') {
+    if (db.periods[uid]) {
+      db.periods[uid] = db.periods[uid].filter(p => p.id !== parseInt(periodDel[1]));
+      saveDB(db);
+    }
+    return { message: 'deleted' };
+  }
+
   // ============ 圈子动态流（个人打卡日志流：最近 15 条餐食生成动态） ============
   if (url === '/api/community/feed' && method === 'GET') {
     const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
@@ -877,7 +948,7 @@ export function mockRequest(method, url, data) {
       return { __status: 400, detail: '备份文件格式不正确' };
     }
     // 基础结构校验通过后整库覆盖；导入后登录态指向原库用户，重置为未登录防串号
-    // 注意：运动/睡眠表也要一并恢复，否则换机后这两类记录会丢失或串库
+    // 注意：运动/睡眠/生理期表也要一并恢复，否则换机后这些记录会丢失或串库
     const restored = {
       users: incoming.users || {},
       meals: incoming.meals || {},
@@ -885,6 +956,7 @@ export function mockRequest(method, url, data) {
       weights: incoming.weights || {},
       exercises: incoming.exercises || {},
       sleeps: incoming.sleeps || {},
+      periods: incoming.periods || {},
     };
     db.users = restored.users;
     db.meals = restored.meals;
@@ -892,6 +964,7 @@ export function mockRequest(method, url, data) {
     db.weights = restored.weights;
     db.exercises = restored.exercises;
     db.sleeps = restored.sleeps;
+    db.periods = restored.periods;
     db.currentUser = null;
     saveDB(db);
     return { message: '导入成功，请重新登录' };

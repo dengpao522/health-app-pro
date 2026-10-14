@@ -115,9 +115,11 @@ export default {
         .filter(g => g.items.length);
     },
   },
-  onLoad() {
+  onLoad(query) {
     this.today = this.fmt(new Date());
-    this.date = this.today;
+    // 打卡日历点击带日期跳转（query.date），非法/未来日期兜底回今天
+    const q = (query && query.date) || '';
+    this.date = /^\d{4}-\d{2}-\d{2}$/.test(q) && q <= this.today ? q : this.today;
   },
   onShow() {
     // 从历史页删完记录返回时刷新当天数据

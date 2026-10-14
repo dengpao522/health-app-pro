@@ -91,6 +91,15 @@
       <text class="fe-go">开始 ›</text>
     </view>
 
+    <!-- 生理期入口：仅女性账号显示（对标薄荷生理期记录） -->
+    <view class="period-entry" v-if="isFemale" @click="toPeriod">
+      <view class="pe-left">
+        <text class="pe-title">🌸 生理期</text>
+        <text class="pe-sub">{{ periodTip }}</text>
+      </view>
+      <text class="pe-go">查看 ›</text>
+    </view>
+
     <!-- ============ 常吃食物：彩色 emoji 网格 ============ -->
     <view class="card frequent-card" v-if="frequent.length">
       <view class="card-head">
@@ -306,6 +315,9 @@ export default {
       bedtime: '23:00',
       waketime: '07:00',
       sleepHours: 0,
+      // 生理期：女性账号才显示入口；tip 显示状态一句话
+      isFemale: false,
+      periodTip: '记录经期，预测周期',
     };
   },
   computed: {
@@ -379,6 +391,9 @@ export default {
       this.nickname = user.nickname || user.username || '朋友';
       this.avatarText = (this.nickname || 'U').charAt(0).toUpperCase();
       this.goalLabel = GOAL_NAMES[user.goal] || '均衡';
+      // 女性账号拉生理期状态，入口副标题显示周期状态一句话
+      this.isFemale = user.gender === 'female';
+      if (this.isFemale) this.loadPeriodTip();
       const h = new Date().getHours();
       this.greeting = h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
       this.dateStr = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
@@ -460,7 +475,7 @@ export default {
     },
     // 分类 → 配色类名
     catClass(cat) {
-      const map = { '主食': 'c-staple', '肉蛋': 'c-meat', '蔬菜': 'c-veg', '水果': 'c-fruit', '饮品': 'c-drink', '快餐': 'c-fast' };
+      const map = { '主食': 'c-staple', '肉蛋': 'c-meat', '蔬菜': 'c-veg', '水果': 'c-fruit', '饮品': 'c-drink', '快餐': 'c-fast', '坚果': 'c-nut' };
       return map[cat] || 'c-other';
     },
     addWater(amount) {
@@ -495,6 +510,21 @@ export default {
     toFasting() { uni.navigateTo({ url: '/pages/fasting/fasting' }); },
     // 跳转按日历史记录页
     toHistory() { uni.navigateTo({ url: '/pages/history/history' }); },
+    // ===== 生理期 =====
+    // 拉周期状态：经期中显示"经期第X天"，未在经期显示倒计时
+    loadPeriodTip() {
+      request({ url: '/api/period' }).then(r => {
+        if (r && r.latest && r.in_period) {
+          const dayNo = Math.max(1, r.cycle_day || 1);
+          this.periodTip = `经期第 ${dayNo} 天，注意保暖休息`;
+        } else if (r && r.latest && r.days_until > 0) {
+          this.periodTip = `距下次经期约 ${r.days_until} 天`;
+        } else if (r && r.latest) {
+          this.periodTip = '经期临近，注意休息';
+        }
+      }).catch(() => {});
+    },
+    toPeriod() { uni.navigateTo({ url: '/pages/period/period' }); },
     // ===== 睡眠 =====
     // 记录昨晚睡眠：就寝/起床时间由 mock 端换算时长并做合理区间校验
     async saveSleep() {
@@ -638,6 +668,7 @@ export default {
 .c-fruit { background: linear-gradient(135deg, #FFEBE8, #FFD6D6); }
 .c-drink { background: linear-gradient(135deg, #E8F4FF, #D1E8FF); }
 .c-fast { background: linear-gradient(135deg, #FFF3E0, #FFE7BF); }
+.c-nut { background: linear-gradient(135deg, #F5EFE6, #EAD9C2); }
 .c-other { background: linear-gradient(135deg, #F3F4F6, #E9EBEF); }
 .freq-name { display: block; font-size: 22rpx; font-weight: 600; color: var(--text-1); margin-top: 10rpx; white-space: nowrap; overflow: hidden; }
 .freq-cal { display: block; font-size: 19rpx; color: #FF6B35; font-weight: 700; margin-top: 2rpx; }
@@ -656,6 +687,13 @@ export default {
 .fe-title { display: block; color: #fff; font-size: 32rpx; font-weight: 800; }
 .fe-sub { display: block; color: rgba(255,255,255,0.85); font-size: 22rpx; margin-top: 6rpx; }
 .fe-go { color: #fff; font-size: 26rpx; font-weight: 700; background: rgba(255,255,255,0.2); padding: 10rpx 24rpx; border-radius: 30rpx; }
+
+/* ===== 生理期入口（粉玫瑰色系） ===== */
+.period-entry { margin: 22rpx 24rpx; background: linear-gradient(120deg, #FB7185, #F43F5E); border-radius: 28rpx; padding: 30rpx 34rpx; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8rpx 24rpx rgba(244,63,94,0.28); cursor: pointer; animation: fadeUp .5s ease both; }
+.period-entry:active { transform: scale(0.985); }
+.pe-title { display: block; color: #fff; font-size: 32rpx; font-weight: 800; }
+.pe-sub { display: block; color: rgba(255,255,255,0.88); font-size: 22rpx; margin-top: 6rpx; }
+.pe-go { color: #fff; font-size: 26rpx; font-weight: 700; background: rgba(255,255,255,0.2); padding: 10rpx 24rpx; border-radius: 30rpx; }
 
 /* ===== 饮水 ===== */
 .water-card2 { animation: fadeUp .55s ease both; }

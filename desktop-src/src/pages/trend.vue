@@ -40,6 +40,30 @@
       </view>
     </view>
 
+    <!-- 打卡日历：月视图热力格，点已记录日期跳历史页 -->
+    <view class="card cal-card">
+      <view class="cal-head">
+        <text class="cal-nav" :class="{ disabled: calMonth <= minMonth }" @click="shiftMonth(-1)">‹</text>
+        <text class="cal-title">{{ calMonthLabel }}</text>
+        <text class="cal-nav" :class="{ disabled: calMonth >= thisMonth }" @click="shiftMonth(1)">›</text>
+      </view>
+      <text class="cal-sub" v-if="cal">本月已记录 {{ cal.logged_count }} 天</text>
+      <view class="cal-week">
+        <text class="cw-item" v-for="w in ['日','一','二','三','四','五','六']" :key="w">{{ w }}</text>
+      </view>
+      <view class="cal-grid" v-if="cal">
+        <view v-for="(cell, i) in calGrid" :key="'c' + i" class="cal-cell">
+          <view v-if="cell" class="cal-day"
+                :class="{ logged: cell.logged, today: cell.isToday, future: cell.future }"
+                @click="cell.logged && goDay(cell.date)">
+            <text class="cd-num">{{ cell.day }}</text>
+            <view class="cd-dot" v-if="cell.logged"></view>
+          </view>
+        </view>
+      </view>
+      <text class="cal-tip">绿色 = 当天有饮食记录；点绿色日期可回看那天的记录</text>
+    </view>
+
     <view class="card">
       <view class="card-title">🔥 每日热量摄入</view>
       <canvas canvas-id="calChart" design-width="660" design-height="320" class="chart"></canvas>
@@ -71,8 +95,42 @@
 <script>
 import { request } from '../js/request.js';
 export default {
-  data() { return { days: 7, points: [], targetCal: 2000, report: null }; },
-  onShow() { this.loadData(); },
+  data() { return { days: 7, points: [], targetCal: 2000, report: null, cal: null, calMonth: '' }; },
+  computed: {
+    // 当前自然月（YYYY-MM），用于限制翻页上限
+    thisMonth() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    },
+    // 最早可翻月份：注册当天（数据从那时开始，再往前翻没有意义）
+    minMonth() {
+      const u = (uni.getStorageSync('userInfo') || {}).user || {};
+      const created = u.created_at || u.date_joined || '';
+      return /^\d{4}-\d{2}/.test(created) ? created.slice(0, 7) : '2020-01';
+    },
+    calMonthLabel() { return this.calMonth ? this.calMonth.replace('-', ' 年 ') + ' 月' : ''; },
+    // 月视图网格：前置空白补齐 + 每天 { day, date, logged, isToday, future }
+    calGrid() {
+      if (!this.cal) return [];
+      const [y, m] = this.calMonth.split('-').map(Number);
+      const firstDow = new Date(y, m - 1, 1).getDay(); // 0=周日
+      const daysInMonth = new Date(y, m, 0).getDate();
+      const today = this.cal.today;
+      const cells = [];
+      for (let i = 0; i < firstDow; i++) cells.push(null);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        const info = this.cal.days[date];
+        cells.push({ day: d, date, logged: !!(info && info.logged), isToday: date === today, future: date > today });
+      }
+      return cells;
+    },
+  },
+  onShow() {
+    this.calMonth = this.calMonth || this.thisMonth;
+    this.loadData();
+    this.loadCalendar();
+  },
   methods: {
     async loadData() {
       // 周报独立拉取：失败不影响图表
@@ -97,6 +155,25 @@ export default {
     isDark() {
       const el = document.querySelector('.app-shell');
       return !!(el && el.getAttribute('data-theme') === 'dark');
+    },
+    // ===== 打卡日历 =====
+    async loadCalendar() {
+      try {
+        this.cal = await request({ url: '/api/calendar', data: { month: this.calMonth } });
+      } catch (e) {}
+    },
+    // 翻月：minMonth~thisMonth 之间
+    shiftMonth(n) {
+      const [y, m] = this.calMonth.split('-').map(Number);
+      const d = new Date(y, m - 1 + n, 1);
+      const next = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      if (next < this.minMonth || next > this.thisMonth) return;
+      this.calMonth = next;
+      this.loadCalendar();
+    },
+    // 点已记录日期 → 历史页回看那天（query 由 polyfill 透传）
+    goDay(date) {
+      uni.navigateTo({ url: '/pages/history/history?date=' + date });
     },
     drawCal() {
       const ctx = this.getCtx('calChart');
@@ -263,6 +340,26 @@ export default {
 /* 睡眠小结条：紫罗兰色系与首页睡眠卡一致 */
 .sleep-summary { display: flex; align-items: center; gap: 12rpx; background: rgba(139,124,246,0.12); border-radius: 16rpx; padding: 14rpx 20rpx; margin-bottom: 16rpx; }
 .sleeps-text { font-size: 22rpx; color: #8B7CF6; font-weight: 600; }
+
+/* ===== 打卡日历 ===== */
+.cal-card { animation: fadeUp .35s ease both; }
+.cal-head { display: flex; align-items: center; justify-content: center; gap: 40rpx; margin-bottom: 6rpx; }
+.cal-nav { width: 60rpx; height: 60rpx; line-height: 56rpx; text-align: center; font-size: 36rpx; color: var(--text-2); background: var(--bg-input); border-radius: 50%; cursor: pointer; }
+.cal-nav.disabled { opacity: 0.3; }
+.cal-title { font-size: 30rpx; font-weight: 800; color: var(--text-1); min-width: 180rpx; text-align: center; }
+.cal-sub { display: block; text-align: center; font-size: 22rpx; color: var(--text-3); margin-bottom: 20rpx; }
+.cal-week { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 8rpx; }
+.cw-item { text-align: center; font-size: 21rpx; color: var(--text-4); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; }
+.cal-cell { aspect-ratio: 1; }
+.cal-day { width: 100%; height: 100%; border-radius: 14rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-input); cursor: default; }
+.cal-day.logged { background: rgba(34,197,94,0.16); cursor: pointer; }
+.cal-day.logged:active { background: rgba(34,197,94,0.32); }
+.cal-day.future { opacity: 0.35; }
+.cal-day.today { box-shadow: inset 0 0 0 3rpx #FF6B35; }
+.cd-num { font-size: 24rpx; font-weight: 700; color: var(--text-1); line-height: 1.1; }
+.cd-dot { width: 8rpx; height: 8rpx; border-radius: 50%; background: #16A34A; margin-top: 4rpx; }
+.cal-tip { display: block; text-align: center; font-size: 19rpx; color: var(--text-4); margin-top: 16rpx; }
 .report-insights { display: flex; flex-direction: column; gap: 12rpx; }
 .insight-item { display: flex; gap: 12rpx; align-items: flex-start; }
 .insight-dot { font-size: 24rpx; flex-shrink: 0; margin-top: 2rpx; }

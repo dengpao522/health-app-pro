@@ -28,6 +28,15 @@
       <text class="ac-foot">最长连续打卡 {{ achieve.maxStreak }} 天 · 记录、运动、打卡都能涨积分</text>
     </view>
 
+    <!-- 健康工具箱入口：BMI/基础代谢/体脂率等六大计算器（薄荷工具箱同款） -->
+    <view class="tools-entry" @click="toTools">
+      <view class="te-left">
+        <text class="te-title">🧮 健康工具箱</text>
+        <text class="te-sub">BMI · 基础代谢 · 体脂率 · 理想体重</text>
+      </view>
+      <text class="te-go">打开 ›</text>
+    </view>
+
     <!-- 每日目标卡片 -->
     <view class="card target-card">
       <view class="card-title">🎯 每日目标</view>
@@ -218,6 +227,8 @@ export default {
     request({ url: '/api/me/achievements' }).then(r => { this.achieve = r; }).catch(() => {});
   },
   methods: {
+    // 跳转健康工具箱（六大健康指标计算器）
+    toTools() { uni.navigateTo({ url: '/pages/tools/tools' }); },
     onActivity(e) { this.activityIdx = +e.detail.value; this.form.activity_level = ACTIVITIES[this.activityIdx].key; },
     onGoal(e) { this.goalIdx = +e.detail.value; this.form.goal = GOALS[this.goalIdx].key; },
     // ===== 自定义热量 =====
@@ -398,6 +409,14 @@ export default {
 .card { background: var(--bg-card); border-radius: 24rpx; padding: 32rpx; margin: 20rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); }
 .card-title { font-size: 30rpx; font-weight: 700; color: var(--text-1); margin-bottom: 24rpx; }
 
+/* ===== 健康工具箱入口 ===== */
+.tools-entry { margin: 0 24rpx 22rpx; background: linear-gradient(120deg, #6366F1, #4F46E5); border-radius: 28rpx; padding: 28rpx 32rpx; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8rpx 24rpx rgba(79,70,229,0.28); cursor: pointer; }
+.tools-entry:active { transform: scale(0.985); }
+.te-title { display: block; color: #fff; font-size: 30rpx; font-weight: 800; }
+.te-sub { display: block; color: rgba(255,255,255,0.85); font-size: 21rpx; margin-top: 6rpx; }
+.te-go { color: #fff; font-size: 24rpx; font-weight: 700; background: rgba(255,255,255,0.2); padding: 10rpx 24rpx; border-radius: 30rpx; }
+
+/* ===== 每日目标 ===== */
 .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
 .t-item { background: linear-gradient(135deg, rgba(255,107,53,0.14), rgba(255,107,53,0.07)); border-radius: 16rpx; padding: 24rpx; text-align: center; }
 .t-val { display: block; font-size: 40rpx; font-weight: 800; color: #FF6B35; }
