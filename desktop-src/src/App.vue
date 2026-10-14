@@ -61,6 +61,27 @@ export default {
     window.__getThemePref = () => localStorage.getItem(THEME_KEY) || 'light';
     // 饮水提醒：浏览器单页应用内定时器（非 Worker 环境，可安全使用）
     this.startWaterReminder();
+    // 全局错误兜底：未捕获的异步异常记日志并温和提示（防"页面无响应"型差评）
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('[app] 未处理的Promise异常:', e.reason);
+    });
+    window.addEventListener('error', (e) => {
+      console.error('[app] 运行时错误:', e.message);
+    });
+    // localStorage 容量预警：超过 4MB 提醒导出备份（配额一般 5~10MB）
+    try {
+      const used = (localStorage.getItem('health_app_mock_db') || '').length;
+      if (used > 4 * 1024 * 1024) {
+        setTimeout(() => {
+          uni.showModal({
+            title: '存储空间提示',
+            content: '本机健康数据已较大，建议在「我的-数据备份」导出一份 JSON 备份，防止意外丢失。',
+            confirmText: '知道了',
+            showCancel: false,
+          });
+        }, 3000);
+      }
+    } catch (e) {}
   },
   methods: {
     applyTheme() { this.theme = resolveTheme(); },

@@ -35,6 +35,9 @@ function loadDB() {
   if (!db.sleeps) { db.sleeps = {}; changed = true; }
   // 旧版本库升级：补生理期记录表（女性健康）
   if (!db.periods) { db.periods = {}; changed = true; }
+  // 旧版本库升级：补社区互动表（点赞/评论）
+  if (!db.likes) { db.likes = {}; changed = true; }
+  if (!db.comments) { db.comments = {}; changed = true; }
   // 老用户升级到新版时也补上演示账号（demo / 123456），不影响其已有账号
   if (!Object.values(db.users).some(u => u.username === 'demo')) {
     seedDemo(db);
@@ -921,6 +924,43 @@ export function mockRequest(method, url, data) {
     return { message: 'deleted' };
   }
 
+  // ============ 社区互动（点赞/评论，存 localStorage，全本地无网络依赖） ============
+  // 点赞状态查询：返回当前用户点过赞的全部动态 id 列表（页面恢复状态用）
+  if (url === '/api/community/likes' && method === 'GET') {
+    return Object.keys(db.likes || {}).filter(k => db.likes[k]);
+  }
+  // 点赞：再点一次取消（toggle）；记录在 likes 表 { [动态id]: true }
+  if (url === '/api/community/like' && method === 'POST') {
+    if (!db.likes) db.likes = {};
+    const feedId = String(data.feed_id || '');
+    if (!feedId) return { __status: 400, detail: '参数缺失' };
+    if (db.likes[feedId]) delete db.likes[feedId];
+    else db.likes[feedId] = true;
+    saveDB(db);
+    return { liked: !!db.likes[feedId] };
+  }
+  // 评论列表：按动态 id 取（新评论在前）
+  if (url === '/api/community/comments' && method === 'GET') {
+    if (!db.comments) db.comments = {};
+    const feedId = String(data.feed_id || '');
+    return (db.comments[feedId] || []).slice().reverse();
+  }
+  // 发评论：昵称取当前用户，内容裁到 100 字
+  if (url === '/api/community/comments' && method === 'POST') {
+    if (!db.comments) db.comments = {};
+    const feedId = String(data.feed_id || '');
+    const text = String(data.text || '').trim().slice(0, 100);
+    if (!feedId || !text) return { __status: 400, detail: '评论内容不能为空' };
+    const c = {
+      id: Date.now(), feed_id: feedId,
+      author: user.nickname || user.username || '我',
+      text, created_at: new Date().toISOString(),
+    };
+    db.comments[feedId] = [...(db.comments[feedId] || []), c];
+    saveDB(db);
+    return c;
+  }
+
   // ============ 圈子动态流（个人打卡日志流：最近 15 条餐食生成动态） ============
   if (url === '/api/community/feed' && method === 'GET') {
     const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
@@ -957,6 +997,8 @@ export function mockRequest(method, url, data) {
       exercises: incoming.exercises || {},
       sleeps: incoming.sleeps || {},
       periods: incoming.periods || {},
+      likes: incoming.likes || {},
+      comments: incoming.comments || {},
     };
     db.users = restored.users;
     db.meals = restored.meals;
@@ -965,6 +1007,8 @@ export function mockRequest(method, url, data) {
     db.exercises = restored.exercises;
     db.sleeps = restored.sleeps;
     db.periods = restored.periods;
+    db.likes = restored.likes;
+    db.comments = restored.comments;
     db.currentUser = null;
     saveDB(db);
     return { message: '导入成功，请重新登录' };

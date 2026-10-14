@@ -108,6 +108,27 @@ export function recommendRecipes(goal, mealType) {
   return matched.length >= 2 ? matched : pool;
 }
 
+// 智能排序版推荐：结合用户目标 + 当前热量余量
+// 余量充足的食谱排前面；余量紧张时把低卡食谱顶上来，并在 reason 后追加余量提示
+export function recommendSmart(goal, mealType, remainCal) {
+  const pool = recommendRecipes(goal, mealType);
+  // 没有余量信息（统计没加载出来）就退回原排序
+  if (typeof remainCal !== 'number' || remainCal <= 0) return pool;
+  return pool
+    .map(r => ({
+      ...r,
+      // 余量差：食谱热量越接近"余量的 1/2~2/3"越合适，越接近或超出余量越靠后
+      fit: Math.abs(r.calories - remainCal * 0.6),
+      over: r.calories > remainCal,
+    }))
+    .sort((a, b) => a.fit - b.fit)
+    .map(r => {
+      if (r.over) return { ...r, reason: r.reason + '；注意：这份超出了你今天还能吃的量，建议减半或明天安排' };
+      if (r.fit > remainCal * 0.35) return { ...r, reason: r.reason + '；这份偏丰盛，今天余量不多，可以去掉部分主食' };
+      return r;
+    });
+}
+
 // 根据当前时间返回默认展示的餐次
 export function mealTypeByHour() {
   const h = new Date().getHours();

@@ -33,7 +33,23 @@
       <text class="tip-text">{{ dailyTip }}</text>
     </view>
 
-    <!-- 打卡动态流：个人打卡日志（本地数据，无网络依赖） -->
+    <!-- 热门话题：3 天轮换一批，本地氛围组 -->
+    <view class="card topic-card">
+      <view class="card-head">
+        <text class="ch-icon">🔥</text>
+        <text class="ch-title">热门话题</text>
+        <text class="ch-sub">每 3 天更新</text>
+      </view>
+      <view class="topic-row" v-for="t in topics" :key="t.tag">
+        <view class="tp-info">
+          <text class="tp-tag">{{ t.tag }}</text>
+          <text class="tp-desc">{{ t.desc }}</text>
+        </view>
+        <text class="tp-hot">{{ t.hot }} 人参与</text>
+      </view>
+    </view>
+
+    <!-- 打卡动态流：个人打卡日志（本地数据，无网络依赖），支持点赞/评论 -->
     <view class="feed-head">
       <text class="fh-title">🔥 打卡动态</text>
       <text class="fh-sub">最近 {{ feed.length }} 条</text>
@@ -44,10 +60,29 @@
           <text class="fi-icon">{{ mealIcon(f.meal_type) }}</text>
           <view class="fi-info">
             <text class="fi-name">{{ f.food_name }} <text class="fi-serving">{{ f.serving_size }}{{ f.serving_unit }}</text></text>
-            <text class="fi-meta">{{ f.meal_name }} · {{ f.date.slice(5) }} {{ f.time }}</text>
+            <text class="fi-meta">{{ f.meal_name }} · {{ f.date.slice(5) }} {{ f.time }} · {{ mealScoreHint(f.calories) }}</text>
           </view>
         </view>
-        <text class="fi-cal">{{ Math.round(f.calories) }} kcal</text>
+        <view class="fi-right">
+          <text class="fi-cal">{{ Math.round(f.calories) }} kcal</text>
+          <!-- 点赞：❤️ toggle -->
+          <view class="fi-like" :class="{ on: likedMap[f.id] }" @click="toggleLike(f.id)">{{ likedMap[f.id] ? '❤️' : '🤍' }}</view>
+        </view>
+        <!-- 评论：展开收起 -->
+        <view class="fi-comments" v-if="openComments === f.id">
+          <view class="c-item" v-for="c in (commentMap[f.id] || [])" :key="c.id">
+            <text class="c-author">{{ c.author }}</text>
+            <text class="c-text">{{ c.text }}</text>
+          </view>
+          <view class="c-input-row">
+            <input class="c-input" v-model="commentDraft" placeholder="写点鼓励的话…" maxlength="100"
+                   @keyup.enter="sendComment(f.id)" />
+            <view class="c-send" @click="sendComment(f.id)">发送</view>
+          </view>
+        </view>
+        <view class="fi-cmt-btn" @click="toggleComments(f.id)">
+          {{ openComments === f.id ? '收起评论' : '💬 评论' + (commentCount(f.id) ? ' ' + commentCount(f.id) : '') }}
+        </view>
       </view>
     </view>
     <view class="card empty-card" v-else>
@@ -94,6 +129,19 @@ const TIP_BANK = [
   '每周减重 0.5~1kg 是安全速度，过快掉的多是水分和肌肉。',
 ];
 
+// 热门话题库：按天轮换展示 3 个（本地模拟社区氛围，无网络依赖）
+const TOPIC_BANK = [
+  { tag: '#16:8轻断食打卡', desc: '分享你的断食窗口和时间表', hot: '2.1万' },
+  { tag: '#宿舍减脂餐', desc: '不做饭也能吃好的 N 种方案', hot: '1.8万' },
+  { tag: '#戒奶茶第7天', desc: '一起用无糖茶替代下午茶', hot: '9.6千' },
+  { tag: '#今晚吃啥', desc: '晒出你的晚餐，互相抄作业', hot: '3.4万' },
+  { tag: '#体重秤上的惊喜', desc: '掉秤/围度变化都值得庆祝', hot: '1.2万' },
+  { tag: '#办公室健康零食', desc: '工位抽屉里的低卡宝藏', hot: '7.8千' },
+  { tag: '#周末轻断食挑战', desc: '从 14:10 开始的温和入门', hot: '6.5千' },
+  { tag: '#跑步装备党', desc: '跑鞋/手环/腰包讨论区', hot: '5.2千' },
+  { tag: '#高蛋白食谱互换', desc: '鸡胸肉的一百种做法', hot: '2.7万' },
+];
+
 function daySeed() {
   const d = new Date();
   return d.getFullYear() * 372 + (d.getMonth() + 1) * 31 + d.getDate();
@@ -104,6 +152,13 @@ export default {
     return {
       feed: [],
       quizPicked: null,
+      // 点赞状态映射 { [feedId]: true }
+      likedMap: {},
+      // 评论缓存 { [feedId]: [评论] }，展开过的动态才拉取
+      commentMap: {},
+      // 当前展开评论的动态 id（同一时间只展开一个）
+      openComments: null,
+      commentDraft: '',
     };
   },
   computed: {
@@ -114,6 +169,12 @@ export default {
       const d = new Date();
       return d.getMonth() + 1 + '月' + d.getDate() + '日';
     },
+    // 热门话题：按 daySeed 轮换 3 个（每 3 天换一批，制造"在变化"的感觉）
+    topics() {
+      const all = TOPIC_BANK;
+      const start = (daySeed() / 3 | 0) % all.length;
+      return [all[start % all.length], all[(start + 1) % all.length], all[(start + 2) % all.length]];
+    },
   },
   onShow() { this.loadData(); },
   methods: {
@@ -121,6 +182,13 @@ export default {
       try {
         this.feed = await request({ url: '/api/community/feed' }) || [];
       } catch (e) { console.error(e); }
+      // 动态就绪后恢复我点过的赞（一次查询拿到全部 id）
+      try {
+        const ids = await request({ url: '/api/community/likes' }) || [];
+        const map = {};
+        ids.forEach(id => { map[id] = true; });
+        this.likedMap = map;
+      } catch (e) {}
     },
     pickQuiz(i) {
       if (this.quizPicked !== null) return; // 已作答锁定
@@ -134,6 +202,40 @@ export default {
     },
     mealIcon(t) {
       return { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍪' }[t] || '🍽️';
+    },
+    // 单餐热量轻评语：给动态流一点"社区感"的点缀
+    mealScoreHint(cal) {
+      if (cal <= 300) return '轻食模范 👏';
+      if (cal <= 600) return '恰到好处';
+      if (cal <= 850) return '吃得挺扎实';
+      return '豪华一餐 🎉';
+    },
+    // ===== 点赞 =====
+    async toggleLike(feedId) {
+      try {
+        const r = await request({ url: '/api/community/like', method: 'POST', data: { feed_id: feedId } });
+        this.likedMap = { ...this.likedMap, [feedId]: r.liked };
+      } catch (e) {}
+    },
+    // ===== 评论 =====
+    commentCount(feedId) { return (this.commentMap[feedId] || []).length; },
+    async toggleComments(feedId) {
+      if (this.openComments === feedId) { this.openComments = null; return; }
+      this.openComments = feedId;
+      this.commentDraft = '';
+      try {
+        const list = await request({ url: '/api/community/comments', data: { feed_id: feedId } });
+        this.commentMap = { ...this.commentMap, [feedId]: list || [] };
+      } catch (e) {}
+    },
+    async sendComment(feedId) {
+      const text = (this.commentDraft || '').trim();
+      if (!text) { uni.showToast({ title: '先写点什么吧', icon: 'none' }); return; }
+      try {
+        const c = await request({ url: '/api/community/comments', method: 'POST', data: { feed_id: feedId, text } });
+        this.commentMap = { ...this.commentMap, [feedId]: [...(this.commentMap[feedId] || []), c] };
+        this.commentDraft = '';
+      } catch (e) {}
     },
     goHome() { uni.switchTab({ url: '/pages/home/home' }); },
   }
@@ -166,22 +268,46 @@ export default {
 .qe-text { font-size: 23rpx; color: var(--text-2); line-height: 1.6; }
 
 /* ===== 知识卡 ===== */
-.tip-card { background: linear-gradient(135deg, #FFF8E8, var(--bg-card)); }
+.tip-card { background: linear-gradient(135deg, rgba(255,215,64,0.10), var(--bg-card)); }
 .tip-text { font-size: 25rpx; color: var(--text-2); line-height: 1.8; }
+
+/* ===== 热门话题 ===== */
+.topic-row { display: flex; justify-content: space-between; align-items: center; padding: 18rpx 0; border-bottom: 1rpx solid var(--line); }
+.topic-row:last-child { border-bottom: none; }
+.tp-info { flex: 1; }
+.tp-tag { display: block; font-size: 27rpx; font-weight: 700; color: #FF6B35; }
+.tp-desc { display: block; font-size: 21rpx; color: var(--text-3); margin-top: 4rpx; }
+.tp-hot { font-size: 20rpx; color: var(--text-4); flex-shrink: 0; margin-left: 16rpx; }
 
 /* ===== 动态流 ===== */
 .feed-head { display: flex; justify-content: space-between; align-items: center; margin: 26rpx 28rpx 6rpx; }
 .fh-title { font-size: 32rpx; font-weight: 800; color: var(--text-1); }
 .fh-sub { font-size: 20rpx; color: var(--text-4); }
-.feed-item { display: flex; justify-content: space-between; align-items: center; padding: 20rpx 0; border-bottom: 1rpx solid var(--line); }
+.feed-item { display: flex; flex-wrap: wrap; align-items: center; padding: 20rpx 0; border-bottom: 1rpx solid var(--line); }
 .feed-item:last-child { border-bottom: none; }
-.fi-left { display: flex; align-items: center; gap: 18rpx; flex: 1; }
+.fi-left { display: flex; align-items: center; gap: 18rpx; flex: 1; min-width: 0; }
 .fi-icon { font-size: 40rpx; }
-.fi-info { flex: 1; }
+.fi-info { flex: 1; min-width: 0; }
 .fi-name { display: block; font-size: 28rpx; font-weight: 600; color: var(--text-1); }
 .fi-serving { font-size: 20rpx; color: var(--text-4); font-weight: 400; }
 .fi-meta { display: block; font-size: 21rpx; color: var(--text-3); margin-top: 4rpx; }
+.fi-right { display: flex; align-items: center; gap: 16rpx; flex-shrink: 0; }
 .fi-cal { font-size: 27rpx; font-weight: 800; color: #FF6B35; }
+.fi-like { font-size: 34rpx; cursor: pointer; padding: 4rpx; }
+.fi-like:active { transform: scale(1.25); }
+/* 评论按钮：整行可点 */
+.fi-cmt-btn { width: 100%; margin-top: 12rpx; font-size: 21rpx; color: var(--text-3); cursor: pointer; }
+.fi-cmt-btn:active { color: #FF6B35; }
+/* 评论区 */
+.fi-comments { width: 100%; margin-top: 14rpx; background: var(--bg-soft); border-radius: 16rpx; padding: 16rpx 20rpx; }
+.c-item { padding: 10rpx 0; border-bottom: 1rpx solid var(--line); }
+.c-item:last-of-type { border-bottom: none; }
+.c-author { font-size: 22rpx; font-weight: 700; color: #16A34A; margin-right: 12rpx; }
+.c-text { font-size: 23rpx; color: var(--text-2); line-height: 1.6; }
+.c-input-row { display: flex; align-items: center; gap: 12rpx; margin-top: 12rpx; }
+.c-input { flex: 1; background: var(--bg-card); border-radius: 26rpx; padding: 12rpx 24rpx; font-size: 24rpx; color: var(--text-1); }
+.c-send { font-size: 24rpx; font-weight: 700; color: #fff; background: linear-gradient(135deg, #34C77B, #22A05F); padding: 12rpx 28rpx; border-radius: 26rpx; cursor: pointer; }
+.c-send:active { transform: scale(0.95); }
 
 .empty-card { text-align: center; padding: 70rpx 28rpx; }
 .empty-icon { display: block; font-size: 64rpx; margin-bottom: 14rpx; }
