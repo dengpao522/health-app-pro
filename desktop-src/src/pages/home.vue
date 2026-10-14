@@ -165,11 +165,34 @@
       </view>
     </view>
 
+    <!-- 睡眠：就寝/起床时间 → 时长（对标薄荷睡眠打卡） -->
+    <view class="card sleep-card">
+      <view class="card-head">
+        <text class="ch-icon">😴</text>
+        <text class="ch-title">睡眠</text>
+        <text class="ch-val purple" v-if="sleepHours > 0">昨晚 {{ sleepHours }} 小时</text>
+      </view>
+      <view class="sleep-row">
+        <view class="sleep-field">
+          <text class="sf-lbl">就寝</text>
+          <input type="time" v-model="bedtime" class="sf-inp" />
+        </view>
+        <text class="sleep-arrow">→</text>
+        <view class="sleep-field">
+          <text class="sf-lbl">起床</text>
+          <input type="time" v-model="waketime" class="sf-inp" />
+        </view>
+        <view class="sleep-save" @click="saveSleep">记录</view>
+      </view>
+      <text class="sleep-tip">成人建议睡 7~9 小时；睡不够会拉高饥饿素，让控制食欲更难</text>
+    </view>
+
     <!-- 餐次 -->
     <view class="card meal-card">
       <view class="card-head">
         <text class="ch-icon">🍽️</text>
         <text class="ch-title">今日饮食</text>
+        <text class="ch-link" @click="toHistory">全部记录 ›</text>
         <text class="ch-val orange">{{ summary.meals.length }} 项</text>
       </view>
       <view class="meal-type-row">
@@ -275,10 +298,14 @@ export default {
       frequent: [],
       // 热量数字滚动动画的显示值
       displayCal: 0,
-      // 当前编辑的记录（null=弹窗关闭）
+      // 编辑记录弹窗（null=关闭）
       editing: null,
       editServing: 100,
       editMealType: 'lunch',
+      // 睡眠：默认就寝 23:00 / 起床 07:00（input type=time 的 HH:MM 格式）
+      bedtime: '23:00',
+      waketime: '07:00',
+      sleepHours: 0,
     };
   },
   computed: {
@@ -324,13 +351,13 @@ export default {
       if (s >= 50) return '#FF8F5E';
       return '#FF4D4F';
     },
-    // 评分横幅背景：按等级给渐变底色
+    // 评分横幅背景：按等级给渐变底色（结尾用卡片色变量，深色主题不刺眼）
     scoreBg() {
       const s = this.score.score;
-      if (s >= 85) return 'linear-gradient(135deg, #ECFDF5, #fff)';
-      if (s >= 70) return 'linear-gradient(135deg, #FFFBEB, #fff)';
-      if (s >= 50) return 'linear-gradient(135deg, #FFF5EF, #fff)';
-      return 'linear-gradient(135deg, #FEF2F2, #fff)';
+      if (s >= 85) return 'linear-gradient(135deg, rgba(34,197,94,0.14), var(--bg-card))';
+      if (s >= 70) return 'linear-gradient(135deg, rgba(245,158,11,0.14), var(--bg-card))';
+      if (s >= 50) return 'linear-gradient(135deg, rgba(255,143,94,0.16), var(--bg-card))';
+      return 'linear-gradient(135deg, rgba(255,77,79,0.14), var(--bg-card))';
     },
   },
   watch: {
@@ -366,6 +393,16 @@ export default {
       request({ url: '/api/streak' }).then(r => { this.streak = r; }).catch(() => {});
       request({ url: '/api/meals/frequent' }).then(r => { this.frequent = r || []; }).catch(() => {});
       request({ url: '/api/weight/plan' }).then(r => { this.weightPlan = r; }).catch(() => {});
+      // 睡眠：回显昨晚记录，回填就寝/起床时间方便微调重记
+      request({ url: '/api/sleep' }).then(r => {
+        if (r && r.today) {
+          this.sleepHours = r.today.hours;
+          this.bedtime = r.today.bedtime;
+          this.waketime = r.today.waketime;
+        } else {
+          this.sleepHours = 0;
+        }
+      }).catch(() => {});
     },
     // 数字滚动动画：从当前值平滑滚到目标值（600ms，缓出）
     animateNumber(key, target) {
@@ -456,6 +493,22 @@ export default {
     toRecipes() { uni.navigateTo({ url: '/pages/recipes/recipes' }); },
     // 跳转轻断食计时器
     toFasting() { uni.navigateTo({ url: '/pages/fasting/fasting' }); },
+    // 跳转按日历史记录页
+    toHistory() { uni.navigateTo({ url: '/pages/history/history' }); },
+    // ===== 睡眠 =====
+    // 记录昨晚睡眠：就寝/起床时间由 mock 端换算时长并做合理区间校验
+    async saveSleep() {
+      try {
+        const rec = await request({
+          url: '/api/sleep', method: 'POST',
+          data: { bedtime: this.bedtime, waketime: this.waketime },
+        });
+        this.sleepHours = rec.hours;
+        uni.showToast({ title: `已记录，昨晚睡 ${rec.hours} 小时`, icon: 'success' });
+      } catch (e) {
+        // 校验类错误（时长超限等）mock 已带 detail 提示，这里兜底网络异常
+      }
+    },
     // ===== 运动 =====
     // 快捷记录：选中的运动 + 指定时长，MET 公式由服务端（mock）按体重折算
     quickExercise(minutes) {
@@ -509,7 +562,7 @@ export default {
 </script>
 
 <style>
-.page { min-height: 100vh; background: #F4F5F7; padding-bottom: 40rpx; }
+.page { min-height: 100vh; background: var(--bg-page); padding-bottom: 40rpx; }
 
 /* ===== 头部 ===== */
 .header { padding: 100rpx 32rpx 70rpx; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(150deg, #FF7A45 0%, #FF6B35 45%, #FF5E3A 100%); border-radius: 0 0 44rpx 44rpx; }
@@ -524,16 +577,16 @@ export default {
 .avatar { width: 84rpx; height: 84rpx; border-radius: 50%; background: rgba(255,255,255,0.3); color: #fff; font-size: 38rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 3rpx solid rgba(255,255,255,0.5); }
 
 /* ===== 仪表盘卡 ===== */
-.dash-card { margin: -50rpx 24rpx 0; background: #fff; border-radius: 32rpx; padding: 44rpx 28rpx 36rpx; box-shadow: 0 12rpx 40rpx rgba(255,107,53,0.12); position: relative; }
+.dash-card { margin: -50rpx 24rpx 0; background: var(--bg-card); border-radius: 32rpx; padding: 44rpx 28rpx 36rpx; box-shadow: 0 12rpx 40rpx rgba(255,107,53,0.12); position: relative; }
 .ring-wrap { position: relative; width: 420rpx; height: 420rpx; margin: 0 auto; }
 .ring-canvas { width: 420rpx; height: 420rpx; }
 .ring-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
-.ring-num { display: block; font-size: 76rpx; font-weight: 800; color: #1a1a1a; font-variant-numeric: tabular-nums; }
+.ring-num { display: block; font-size: 76rpx; font-weight: 800; color: var(--text-1); font-variant-numeric: tabular-nums; }
 .ring-num.over { color: #FF4D4F; }
-.ring-label { display: block; font-size: 22rpx; color: #999; margin-top: 6rpx; }
-/* 剩余热量药丸：比纯文字更醒目 */
-.remain-pill { margin: 14rpx auto 0; background: #FFF3ED; color: #FF6B35; font-size: 22rpx; font-weight: 700; padding: 8rpx 24rpx; border-radius: 30rpx; display: inline-block; }
-.remain-pill.over { background: #FEF2F2; color: #FF4D4F; }
+.ring-label { display: block; font-size: 22rpx; color: var(--text-3); margin-top: 6rpx; }
+/* 剩余热量药丸：比纯文字更醒目（半透明品牌色，深浅主题都柔和） */
+.remain-pill { margin: 14rpx auto 0; background: rgba(255,107,53,0.12); color: #FF6B35; font-size: 22rpx; font-weight: 700; padding: 8rpx 24rpx; border-radius: 30rpx; display: inline-block; }
+.remain-pill.over { background: rgba(255,77,79,0.14); color: #FF4D4F; }
 
 /* 四迷你环行 */
 .mini-row { display: flex; justify-content: space-around; margin-top: 36rpx; padding-top: 30rpx; border-top: 1rpx solid #F4F5F7; }
@@ -544,8 +597,8 @@ export default {
 .mini-emoji { position: relative; font-size: 30rpx; }
 .mini-val { display: block; font-size: 26rpx; font-weight: 800; color: var(--text-1); margin-top: 10rpx; font-variant-numeric: tabular-nums; }
 .mini-val.over { color: #FF4D4F; }
-.mini-unit { font-size: 18rpx; color: #bbb; font-weight: 400; }
-.mini-name { display: block; font-size: 20rpx; color: #999; margin-top: 2rpx; }
+.mini-unit { font-size: 18rpx; color: var(--text-4); font-weight: 400; }
+.mini-name { display: block; font-size: 20rpx; color: var(--text-3); margin-top: 2rpx; }
 
 /* ===== 主题适配：卡片/文字走变量 ===== */
 .card { background: var(--bg-card); border-radius: 28rpx; padding: 30rpx 28rpx; margin: 22rpx 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04); }
@@ -613,6 +666,19 @@ export default {
 .w-btn2:active { transform: scale(0.95); }
 .w-btn2.primary { background: linear-gradient(135deg, #6FBCFF, #3D9BFF); color: #fff; }
 
+/* ===== 睡眠卡（紫罗兰色系与运动/饮水区分） ===== */
+.sleep-card { animation: fadeUp .55s ease both; }
+.ch-val.purple { color: #8B7CF6; }
+.ch-link { font-size: 22rpx; color: #FF6B35; font-weight: 700; margin-right: 16rpx; cursor: pointer; }
+.sleep-row { display: flex; align-items: center; gap: 16rpx; }
+.sleep-field { flex: 1; background: var(--bg-input); border-radius: 16rpx; padding: 14rpx 20rpx; display: flex; flex-direction: column; gap: 6rpx; }
+.sf-lbl { font-size: 20rpx; color: var(--text-3); }
+.sf-inp { font-size: 32rpx; font-weight: 800; color: #8B7CF6; background: transparent; border: none; padding: 0; }
+.sleep-arrow { color: var(--text-4); font-size: 28rpx; }
+.sleep-save { padding: 20rpx 34rpx; background: linear-gradient(135deg, #A78BFA, #8B7CF6); color: #fff; border-radius: 40rpx; font-size: 26rpx; font-weight: 700; cursor: pointer; }
+.sleep-save:active { transform: scale(0.95); }
+.sleep-tip { display: block; font-size: 20rpx; color: var(--text-4); margin-top: 18rpx; line-height: 1.6; }
+
 /* ===== 餐次与列表 ===== */
 .meal-card { animation: fadeUp .6s ease both; }
 .meal-type-row { display: flex; justify-content: space-between; margin-bottom: 20rpx; gap: 10rpx; }
@@ -638,29 +704,29 @@ export default {
 .m-right { display: flex; align-items: center; gap: 18rpx; }
 .m-cal { font-size: 30rpx; font-weight: 800; color: #FF6B35; }
 .m-cal::after { content: ' kcal'; font-size: 17rpx; color: var(--text-4); font-weight: 400; }
-.m-edit { font-size: 24rpx; color: #8ab4ff; background: #EDF4FF; width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.m-edit:active { background: #D6E7FF; }
+.m-edit { font-size: 24rpx; color: #8ab4ff; background: rgba(139,180,255,0.16); width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.m-edit:active { background: rgba(139,180,255,0.3); }
 .m-del { font-size: 24rpx; color: var(--text-4); background: var(--bg-input); width: 48rpx; height: 48rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .m-del:active { background: #FFE5E5; color: #FF4D4F; }
 
 /* ===== 编辑弹窗 ===== */
 .edit-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.edit-dialog { width: 82%; max-width: 400px; background: #fff; border-radius: 32rpx; padding: 40rpx 36rpx 32rpx; animation: fadeUp .25s ease both; }
-.ed-title { display: block; font-size: 32rpx; font-weight: 800; color: #1a1a1a; text-align: center; }
+.edit-dialog { width: 82%; max-width: 400px; background: var(--bg-card); border-radius: 32rpx; padding: 40rpx 36rpx 32rpx; animation: fadeUp .25s ease both; }
+.ed-title { display: block; font-size: 32rpx; font-weight: 800; color: var(--text-1); text-align: center; }
 .ed-name { display: block; font-size: 26rpx; color: #FF6B35; font-weight: 700; text-align: center; margin-top: 8rpx; }
 .ed-row { display: flex; align-items: center; margin-top: 30rpx; }
-.ed-lbl { width: 150rpx; font-size: 26rpx; color: #666; }
+.ed-lbl { width: 150rpx; font-size: 26rpx; color: var(--text-2); }
 .ed-stepper { flex: 1; display: flex; align-items: center; gap: 12rpx; }
-.ed-step { width: 64rpx; height: 64rpx; border-radius: 16rpx; background: #F4F5F7; color: #333; font-size: 36rpx; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.ed-step:active { background: #FFE8DD; color: #FF6B35; }
-.ed-input { flex: 1; height: 64rpx; text-align: center; font-size: 30rpx; font-weight: 700; background: #FAFBFC; border-radius: 12rpx; }
+.ed-step { width: 64rpx; height: 64rpx; border-radius: 16rpx; background: var(--bg-input); color: var(--text-1); font-size: 36rpx; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ed-step:active { background: rgba(255,107,53,0.15); color: #FF6B35; }
+.ed-input { flex: 1; height: 64rpx; text-align: center; font-size: 30rpx; font-weight: 700; background: var(--bg-soft); color: var(--text-1); border-radius: 12rpx; }
 .ed-meals { flex: 1; display: flex; gap: 10rpx; flex-wrap: wrap; }
-.ed-meal { padding: 12rpx 22rpx; background: #F4F5F7; border-radius: 30rpx; font-size: 24rpx; color: #666; cursor: pointer; }
-.ed-meal.active { background: #FFF0E8; color: #FF6B35; font-weight: 700; }
-.ed-hint { display: block; font-size: 20rpx; color: #bbb; margin-top: 20rpx; text-align: center; }
+.ed-meal { padding: 12rpx 22rpx; background: var(--bg-input); border-radius: 30rpx; font-size: 24rpx; color: var(--text-2); cursor: pointer; }
+.ed-meal.active { background: rgba(255,107,53,0.14); color: #FF6B35; font-weight: 700; }
+.ed-hint { display: block; font-size: 20rpx; color: var(--text-4); margin-top: 20rpx; text-align: center; }
 .ed-btns { display: flex; gap: 20rpx; margin-top: 30rpx; }
 .ed-btn { flex: 1; text-align: center; padding: 20rpx 0; border-radius: 40rpx; font-size: 28rpx; font-weight: 700; cursor: pointer; }
-.ed-btn.cancel { background: #F4F5F7; color: #666; }
+.ed-btn.cancel { background: var(--bg-input); color: var(--text-2); }
 .ed-btn.ok { background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; }
 
 /* ===== 悬浮按钮 ===== */
@@ -670,17 +736,17 @@ export default {
 .fab-text { font-size: 29rpx; font-weight: 700; }
 
 /* ===== 体重管理方案卡（绿系，与薄荷一致的健康感） ===== */
-.plan-card { margin: 22rpx 24rpx -6rpx; background: linear-gradient(135deg, #EAF9F0, #fff); border-radius: 28rpx; padding: 28rpx 30rpx; box-shadow: 0 4rpx 20rpx rgba(34,197,94,0.10); animation: fadeUp .35s ease both; }
+.plan-card { margin: 22rpx 24rpx -6rpx; background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.02)), var(--bg-card); border-radius: 28rpx; padding: 28rpx 30rpx; box-shadow: 0 4rpx 20rpx rgba(34,197,94,0.10); animation: fadeUp .35s ease both; }
 .plan-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18rpx; }
-.plan-title { font-size: 28rpx; font-weight: 800; color: #166534; }
-.plan-goal-tag { font-size: 20rpx; color: #16A34A; background: #D9F5E5; padding: 4rpx 16rpx; border-radius: 20rpx; font-weight: 700; }
+.plan-title { font-size: 28rpx; font-weight: 800; color: #16A34A; }
+.plan-goal-tag { font-size: 20rpx; color: #16A34A; background: rgba(34,197,94,0.15); padding: 4rpx 16rpx; border-radius: 20rpx; font-weight: 700; }
 .plan-nums { display: flex; justify-content: space-around; align-items: center; }
 .pn-item { text-align: center; }
-.pn-val { display: block; font-size: 40rpx; font-weight: 800; color: #1a1a1a; }
+.pn-val { display: block; font-size: 40rpx; font-weight: 800; color: var(--text-1); }
 .pn-mid { text-align: center; }
 .pn-lost { display: block; font-size: 48rpx; font-weight: 800; color: #16A34A; }
 .pn-lost.zero { color: #9CA3AF; }
-.pn-lbl { display: block; font-size: 20rpx; color: #86A694; margin-top: 4rpx; }
+.pn-lbl { display: block; font-size: 20rpx; color: var(--text-3); margin-top: 4rpx; }
 
 /* ===== 运动卡 ===== */
 .ex-card { animation: fadeUp .5s ease both; }

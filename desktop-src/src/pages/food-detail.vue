@@ -118,8 +118,9 @@ export default {
     goBack() { uni.navigateBack(); },
     // 快捷记录一份（100g/100ml）到当前时段餐次
     async quickAdd() {
+      // 时段归餐次：5~10早餐 / 10~14午餐 / 14~18加餐 / 18~21晚餐 / 凌晨深夜归加餐
       const h = new Date().getHours();
-      const mealType = h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 18 ? 'snack' : 'dinner';
+      const mealType = h >= 5 && h < 10 ? 'breakfast' : h < 14 ? 'lunch' : h < 18 ? 'snack' : h < 21 ? 'dinner' : 'snack';
       const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
       try {
         await request({

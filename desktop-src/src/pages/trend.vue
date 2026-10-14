@@ -27,6 +27,11 @@
         <text class="exs-icon">🏃</text>
         <text class="exs-text">本周运动 {{ report.exercise_days }} 天 · {{ report.exercise_minutes }} 分钟 · 消耗 {{ report.exercise_calories }} kcal</text>
       </view>
+      <!-- 睡眠小结条：有睡眠记录才显示 -->
+      <view class="sleep-summary" v-if="report && report.avg_sleep">
+        <text class="exs-icon">😴</text>
+        <text class="sleeps-text">本周平均睡眠 {{ report.avg_sleep }} 小时（{{ report.sleep_days }} 天有记录）</text>
+      </view>
       <view class="report-insights" v-if="report && report.insights.length">
         <view class="insight-item" v-for="(line, i) in report.insights" :key="i">
           <text class="insight-dot">💡</text>
@@ -88,9 +93,17 @@ export default {
       const ctx = uni.createCanvasContext(id, this);
       return ctx;
     },
+    // 画布文字/圆点用主题感知色（canvas 读不到 CSS 变量，按 data-theme 取值）
+    isDark() {
+      const el = document.querySelector('.app-shell');
+      return !!(el && el.getAttribute('data-theme') === 'dark');
+    },
     drawCal() {
       const ctx = this.getCtx('calChart');
+      const dark = this.isDark();
       const W = 660, H = 320, pad = 40;
+      const valColor = dark ? '#E8EAED' : '#333';
+      const axisColor = dark ? '#7A7F87' : '#999';
       const data = this.points.map(p => p.calories);
       if (!data.length) {
         ctx.clearRect(0, 0, W, H);
@@ -121,11 +134,11 @@ export default {
         this.roundRect(ctx, x, y, bw * 0.6, bh, 6);
         ctx.fill();
         // 数值
-        ctx.setFillStyle('#333'); ctx.setFontSize(18);
+        ctx.setFillStyle(valColor); ctx.setFontSize(18);
         ctx.setTextAlign('center');
         ctx.fillText(Math.round(v), x + bw * 0.3, y - 8);
         // 日期
-        ctx.setFillStyle('#999'); ctx.setFontSize(16);
+        ctx.setFillStyle(axisColor); ctx.setFontSize(16);
         const d = this.points[i].date.slice(5);
         ctx.fillText(d, x + bw * 0.3, H - pad + 22);
       });
@@ -133,6 +146,8 @@ export default {
     },
     drawMacro() {
       const ctx = this.getCtx('macroChart');
+      const dark = this.isDark();
+      const dotFill = dark ? '#1E2126' : '#fff';
       const W = 660, H = 320, pad = 40;
       const p = this.points.map(x => x.protein);
       const f = this.points.map(x => x.fat);
@@ -158,7 +173,7 @@ export default {
         data.forEach((v, i) => {
           const x = pad + i * step;
           const y = H - pad - (v / max) * (H - pad * 2);
-          ctx.setFillStyle('#fff'); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.setFillStyle(dotFill); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
           ctx.setStrokeStyle(color); ctx.setLineWidth(2); ctx.stroke();
         });
       };
@@ -166,13 +181,15 @@ export default {
       // 日期
       this.points.forEach((pt, i) => {
         const x = pad + i * step;
-        ctx.setFillStyle('#999'); ctx.setFontSize(16); ctx.setTextAlign('center');
+        ctx.setFillStyle(dark ? '#7A7F87' : '#999'); ctx.setFontSize(16); ctx.setTextAlign('center');
         ctx.fillText(pt.date.slice(5), x, H - pad + 22);
       });
       ctx.draw();
     },
     drawWeight() {
       const ctx = this.getCtx('weightChart');
+      const dark = this.isDark();
+      const valColor = dark ? '#E8EAED' : '#333';
       const W = 660, H = 260, pad = 40;
       const ws = this.points.map(x => x.weight).filter(x => x);
       if (ws.length === 0) {
@@ -199,7 +216,7 @@ export default {
         const x = pad + i * step;
         const y = H - pad - ((pt.weight - min) / (max - min)) * (H - pad * 2);
         ctx.setFillStyle('#4ECDC4'); ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.setFillStyle('#333'); ctx.setFontSize(18); ctx.setTextAlign('center');
+        ctx.setFillStyle(valColor); ctx.setFontSize(18); ctx.setTextAlign('center');
         ctx.fillText(pt.weight, x, y - 12);
       });
       ctx.draw();
@@ -218,7 +235,7 @@ export default {
 </script>
 
 <style>
-.page { min-height: 100vh; background: #F5F6FA; }
+.page { min-height: 100vh; background: var(--bg-page); }
 .top-bar { padding: 100rpx 32rpx 30rpx; background: linear-gradient(160deg, #FF6B35, #FF8F5E); color: #fff; }
 .page-title { display: block; font-size: 44rpx; font-weight: 800; }
 .page-sub { display: block; font-size: 26rpx; opacity: 0.9; margin-top: 8rpx; }
@@ -226,23 +243,26 @@ export default {
 .card-title { font-size: 30rpx; font-weight: 700; color: var(--text-1); margin-bottom: 20rpx; }
 .chart { width: 100%; height: 320rpx; }
 .chart-legend { display: flex; gap: 30rpx; margin-top: 10rpx; flex-wrap: wrap; }
-.legend-item { font-size: 22rpx; color: #666; display: flex; align-items: center; }
+.legend-item { font-size: 22rpx; color: var(--text-2); display: flex; align-items: center; }
 .dot { width: 16rpx; height: 16rpx; border-radius: 50%; display: inline-block; margin-right: 8rpx; }
 
 /* ===== 每周营养报告 ===== */
-.report-card { border: none; background: linear-gradient(180deg, #FFF6F0, #fff 70%); box-shadow: 0 4rpx 20rpx rgba(255,107,53,0.08); }
+.report-card { border: none; background: linear-gradient(180deg, rgba(255,107,53,0.07), var(--bg-card) 70%); box-shadow: 0 4rpx 20rpx rgba(255,107,53,0.08); }
 .report-summary { display: flex; justify-content: space-around; padding: 12rpx 0 20rpx; margin-bottom: 16rpx; }
-.rs-item { text-align: center; background: #fff; border-radius: 18rpx; padding: 16rpx 26rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05); }
-.rs-item.highlight-o { background: linear-gradient(135deg, #FFF3ED, #FFE8DB); }
-.rs-item.highlight-p { background: linear-gradient(135deg, #E8FBF0, #D6F5E3); }
+.rs-item { text-align: center; background: var(--bg-card); border-radius: 18rpx; padding: 16rpx 26rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05); }
+.rs-item.highlight-o { background: linear-gradient(135deg, rgba(255,107,53,0.14), rgba(255,107,53,0.08)); }
+.rs-item.highlight-p { background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(34,197,94,0.08)); }
 .rs-val { display: block; font-size: 40rpx; font-weight: 800; color: #FF6B35; }
 .rs-item.highlight-p .rs-val { color: #16A34A; }
-.rs-unit { font-size: 22rpx; font-weight: 400; color: #bbb; }
-.rs-lbl { display: block; font-size: 22rpx; color: #999; margin-top: 4rpx; }
+.rs-unit { font-size: 22rpx; font-weight: 400; color: var(--text-4); }
+.rs-lbl { display: block; font-size: 22rpx; color: var(--text-3); margin-top: 4rpx; }
 /* 运动小结条：绿系轻量条 */
-.ex-summary { display: flex; align-items: center; gap: 12rpx; background: #EAF9F0; border-radius: 16rpx; padding: 14rpx 20rpx; margin-bottom: 16rpx; }
+.ex-summary { display: flex; align-items: center; gap: 12rpx; background: rgba(34,197,94,0.12); border-radius: 16rpx; padding: 14rpx 20rpx; margin-bottom: 16rpx; }
 .exs-icon { font-size: 26rpx; }
-.exs-text { font-size: 22rpx; color: #166534; font-weight: 600; }
+.exs-text { font-size: 22rpx; color: #16A34A; font-weight: 600; }
+/* 睡眠小结条：紫罗兰色系与首页睡眠卡一致 */
+.sleep-summary { display: flex; align-items: center; gap: 12rpx; background: rgba(139,124,246,0.12); border-radius: 16rpx; padding: 14rpx 20rpx; margin-bottom: 16rpx; }
+.sleeps-text { font-size: 22rpx; color: #8B7CF6; font-weight: 600; }
 .report-insights { display: flex; flex-direction: column; gap: 12rpx; }
 .insight-item { display: flex; gap: 12rpx; align-items: flex-start; }
 .insight-dot { font-size: 24rpx; flex-shrink: 0; margin-top: 2rpx; }

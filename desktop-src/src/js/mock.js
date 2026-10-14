@@ -31,6 +31,8 @@ function loadDB() {
   }
   // 旧版本库升级：补运动记录表（老用户无痛升级）
   if (!db.exercises) { db.exercises = {}; changed = true; }
+  // 旧版本库升级：补睡眠记录表（对标薄荷的睡眠打卡）
+  if (!db.sleeps) { db.sleeps = {}; changed = true; }
   // 老用户升级到新版时也补上演示账号（demo / 123456），不影响其已有账号
   if (!Object.values(db.users).some(u => u.username === 'demo')) {
     seedDemo(db);
@@ -618,10 +620,11 @@ export function mockRequest(method, url, data) {
     const tg = calcTargets(user);
     const weightMap = {};
     (db.weights[uid] || []).forEach(w => { weightMap[w.date] = w.weight; });
-    // 逐日聚合：是否记录 / 热量 / 蛋白质 / 钠 / 体重 / 运动消耗
+    // 逐日聚合：是否记录 / 热量 / 蛋白质 / 钠 / 体重 / 运动消耗 / 睡眠时长
     const perDay = days.map(d => {
       const list = (db.meals[uid] || []).filter(m => m.date === d);
       const exs = (db.exercises[uid] || []).filter(e => e.date === d);
+      const sl = (db.sleeps[uid] || []).find(s => s.date === d);
       return {
         date: d, logged: list.length > 0,
         calories: list.reduce((s, m) => s + (m.calories || 0), 0),
@@ -630,6 +633,7 @@ export function mockRequest(method, url, data) {
         weight: weightMap[d] || null,
         exCalories: exs.reduce((s, e) => s + (e.calories || 0), 0),
         exMinutes: exs.reduce((s, e) => s + (e.minutes || 0), 0),
+        sleepHours: sl ? sl.hours : null,
       };
     });
     const loggedArr = perDay.filter(d => d.logged);
@@ -641,6 +645,9 @@ export function mockRequest(method, url, data) {
     const totalExMin = perDay.reduce((s, d) => s + d.exMinutes, 0);
     const totalExCal = perDay.reduce((s, d) => s + d.exCalories, 0);
     const exDays = perDay.filter(d => d.exMinutes > 0).length;
+    // 睡眠周汇总：有记录的天数 + 平均时长
+    const sleepDays = perDay.filter(d => d.sleepHours !== null);
+    const avgSleep = sleepDays.length ? +(sleepDays.reduce((s, d) => s + d.sleepHours, 0) / sleepDays.length).toFixed(1) : null;
     // 体重变化：取最近两次记录的差值
     const ws = (db.weights[uid] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
     const weightChange = ws.length >= 2 ? +(ws[ws.length - 1].weight - ws[0].weight).toFixed(1) : null;
@@ -673,6 +680,12 @@ export function mockRequest(method, url, data) {
       } else if (loggedArr.length >= 3) {
         insights.push('本周还没有运动记录，从每天快走 15 分钟开始，消耗会自动抵扣热量');
       }
+      // 睡眠：不足 7 小时会拉高饥饿素、让控卡更难（膳食指南建议成人 7~9 小时）
+      if (avgSleep !== null) {
+        if (avgSleep < 7) insights.push(`本周平均睡眠 ${avgSleep} 小时（${sleepDays.length} 天有记录），睡不够更容易饿，尽量早睡半小时`);
+        else if (avgSleep > 9) insights.push(`本周平均睡眠 ${avgSleep} 小时，睡太多也可能打乱代谢，保持规律作息即可`);
+        else insights.push(`本周平均睡眠 ${avgSleep} 小时，睡眠质量在线，这对控制食欲很有帮助`);
+      }
       // 体重方向与目标的一致性
       if (weightChange !== null && weightChange !== 0) {
         const txt = weightChange < 0 ? `体重下降 ${Math.abs(weightChange)} kg` : `体重上升 ${weightChange} kg`;
@@ -693,6 +706,7 @@ export function mockRequest(method, url, data) {
       avg_protein: avgPro, target_protein: tg.target_protein,
       sodium_over_days: sodiumOverDays,
       exercise_minutes: totalExMin, exercise_days: exDays, exercise_calories: totalExCal,
+      avg_sleep: avgSleep, sleep_days: sleepDays.length,
       weight_change: weightChange,
       insights,
     };
@@ -780,6 +794,62 @@ export function mockRequest(method, url, data) {
     };
   }
 
+  // ============ 睡眠记录（对标薄荷：就寝/起床时间 → 时长，按"昨晚"记在起床当天） ============
+  if (url === '/api/sleep' && method === 'POST') {
+    if (!db.sleeps) db.sleeps = {};
+    const bt = String(data.bedtime || ''), wt = String(data.waketime || '');
+    // 校验 HH:MM 格式（来自 <input type="time">，天然满足，这里兜底防脏数据）
+    if (!/^\d{1,2}:\d{2}$/.test(bt) || !/^\d{1,2}:\d{2}$/.test(wt)) {
+      return { __status: 400, detail: '时间格式不正确' };
+    }
+    const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+    let diff = toMin(wt) - toMin(bt);
+    if (diff <= 0) diff += 24 * 60; // 跨午夜（23:30 → 07:00）
+    if (diff < 60 || diff > 16 * 60) {
+      return { __status: 400, detail: '睡眠时长需在 1~16 小时之间，请检查时间' };
+    }
+    const pad = s => s.padStart(5, '0');
+    const rec = {
+      id: Date.now(), date: todayStr(),
+      bedtime: pad(bt), waketime: pad(wt),
+      hours: +(diff / 60).toFixed(1), created_at: new Date().toISOString(),
+    };
+    // 同一天重复记录时覆盖旧记录（昨晚的睡眠只有一次）
+    db.sleeps[uid] = (db.sleeps[uid] || []).filter(s => s.date !== rec.date);
+    db.sleeps[uid].push(rec);
+    saveDB(db);
+    return rec;
+  }
+  if (url === '/api/sleep' && method === 'GET') {
+    const list = (db.sleeps[uid] || []).slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    return {
+      today: list.find(s => s.date === todayStr()) || null,
+      week: list.slice(-7),
+    };
+  }
+
+  // ============ 记录历史（按日回看：薄荷"记录"tab 的核心能力） ============
+  if (url === '/api/history' && method === 'GET') {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date : todayStr();
+    const meals = (db.meals[uid] || []).filter(m => m.date === d);
+    const exercises = (db.exercises[uid] || []).filter(e => e.date === d);
+    const water = (db.waters[uid] || []).filter(w => w.date === d).reduce((s, w) => s + w.amount, 0);
+    const sleep = (db.sleeps[uid] || []).find(s => s.date === d) || null;
+    // 体重取当天最后一条（同日多次记录以最新为准）
+    const dayWeights = (db.weights[uid] || []).filter(w => w.date === d);
+    const weight = dayWeights.length ? dayWeights[dayWeights.length - 1].weight : null;
+    return {
+      date: d,
+      meals,
+      exercises,
+      water,
+      sleep,
+      weight,
+      calories: Math.round(meals.reduce((s, m) => s + (m.calories || 0), 0)),
+      exercise_calories: exercises.reduce((s, e) => s + (e.calories || 0), 0),
+    };
+  }
+
   // ============ 圈子动态流（个人打卡日志流：最近 15 条餐食生成动态） ============
   if (url === '/api/community/feed' && method === 'GET') {
     const mealNames = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
@@ -807,17 +877,21 @@ export function mockRequest(method, url, data) {
       return { __status: 400, detail: '备份文件格式不正确' };
     }
     // 基础结构校验通过后整库覆盖；导入后登录态指向原库用户，重置为未登录防串号
+    // 注意：运动/睡眠表也要一并恢复，否则换机后这两类记录会丢失或串库
     const restored = {
       users: incoming.users || {},
       meals: incoming.meals || {},
       waters: incoming.waters || {},
       weights: incoming.weights || {},
-      currentUser: null,
+      exercises: incoming.exercises || {},
+      sleeps: incoming.sleeps || {},
     };
     db.users = restored.users;
     db.meals = restored.meals;
     db.waters = restored.waters;
     db.weights = restored.weights;
+    db.exercises = restored.exercises;
+    db.sleeps = restored.sleeps;
     db.currentUser = null;
     saveDB(db);
     return { message: '导入成功，请重新登录' };

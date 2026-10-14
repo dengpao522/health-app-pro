@@ -387,7 +387,7 @@ export default {
 </script>
 
 <style>
-.page { min-height: 100vh; background: #F5F6FA; }
+.page { min-height: 100vh; background: var(--bg-page); }
 .top-bar { padding: 100rpx 32rpx 60rpx; background: linear-gradient(160deg, #FF6B35, #FF8F5E); }
 .user-row { display: flex; align-items: center; }
 .avatar { width: 120rpx; height: 120rpx; border-radius: 50%; background: rgba(255,255,255,0.3); color: #fff; font-size: 48rpx; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-right: 24rpx; }
@@ -399,49 +399,49 @@ export default {
 .card-title { font-size: 30rpx; font-weight: 700; color: var(--text-1); margin-bottom: 24rpx; }
 
 .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx; }
-.t-item { background: linear-gradient(135deg, #FFF0E8, #FFE0CC); border-radius: 16rpx; padding: 24rpx; text-align: center; }
+.t-item { background: linear-gradient(135deg, rgba(255,107,53,0.14), rgba(255,107,53,0.07)); border-radius: 16rpx; padding: 24rpx; text-align: center; }
 .t-val { display: block; font-size: 40rpx; font-weight: 800; color: #FF6B35; }
-.t-lbl { display: block; font-size: 22rpx; color: #999; margin-top: 6rpx; }
+.t-lbl { display: block; font-size: 22rpx; color: var(--text-3); margin-top: 6rpx; }
 
-.form-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-bottom: 1rpx solid #f5f5f5; }
+.form-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-bottom: 1rpx solid var(--line); }
 .form-row:last-of-type { border-bottom: none; }
-.lbl { font-size: 28rpx; color: #666; }
-.inp { text-align: right; font-size: 28rpx; width: 260rpx; }
-.seg { display: flex; background: #f5f5f5; border-radius: 12rpx; padding: 4rpx; }
-.seg-item { padding: 10rpx 28rpx; font-size: 26rpx; color: #666; border-radius: 10rpx; }
+.lbl { font-size: 28rpx; color: var(--text-2); }
+.inp { text-align: right; font-size: 28rpx; width: 260rpx; color: var(--text-1); }
+.seg { display: flex; background: var(--bg-input); border-radius: 12rpx; padding: 4rpx; }
+.seg-item { padding: 10rpx 28rpx; font-size: 26rpx; color: var(--text-2); border-radius: 10rpx; }
 .seg-item.active { background: #FF6B35; color: #fff; }
-.picker { font-size: 28rpx; color: #333; }
+.picker { font-size: 28rpx; color: var(--text-1); }
 .save-btn { background: linear-gradient(135deg, #FF6B35, #FF8F5E); color: #fff; border: none; border-radius: 16rpx; height: 88rpx; line-height: 88rpx; font-size: 30rpx; font-weight: 700; margin-top: 24rpx; }
 
 .weight-row { display: flex; gap: 20rpx; }
-.w-inp { flex: 1; background: #f5f5f5; border-radius: 14rpx; padding: 0 24rpx; height: 76rpx; font-size: 28rpx; }
+.w-inp { flex: 1; background: var(--bg-input); color: var(--text-1); border-radius: 14rpx; padding: 0 24rpx; height: 76rpx; font-size: 28rpx; }
 .w-btn { background: #4ECDC4; color: #fff; border: none; border-radius: 14rpx; height: 76rpx; line-height: 76rpx; padding: 0 36rpx; font-size: 28rpx; }
 
-.logout-btn { margin: 30rpx 24rpx; background: #fff; color: #FF4D4F; border: none; border-radius: 16rpx; height: 88rpx; line-height: 88rpx; font-size: 30rpx; }
+.logout-btn { margin: 30rpx 24rpx; background: var(--bg-card); color: #FF4D4F; border: none; border-radius: 16rpx; height: 88rpx; line-height: 88rpx; font-size: 30rpx; }
 /* 注销按钮：与退出登录区分的更深警示色 */
 .logout-btn.delete-btn { color: #d9363e; font-weight: 600; }
 
 /* ===== 自定义热量目标 ===== */
-.custom-cal { margin-top: 26rpx; padding-top: 26rpx; border-top: 1rpx solid #F4F5F7; }
+.custom-cal { margin-top: 26rpx; padding-top: 26rpx; border-top: 1rpx solid var(--line); }
 .cc-head { display: flex; align-items: center; justify-content: space-between; }
-.cc-title { font-size: 27rpx; font-weight: 700; color: #333; }
+.cc-title { font-size: 27rpx; font-weight: 700; color: var(--text-1); }
 /* 开关：iOS 风胶囊 */
-.cc-switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background: #E5E7EB; position: relative; transition: background .25s; cursor: pointer; }
+.cc-switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background: var(--bg-input); position: relative; transition: background .25s; cursor: pointer; }
 .cc-switch.on { background: #FF6B35; }
 .cc-knob { position: absolute; top: 4rpx; left: 4rpx; width: 40rpx; height: 40rpx; border-radius: 50%; background: #fff; transition: left .25s; box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.2); }
 .cc-switch.on .cc-knob { left: 40rpx; }
 .cc-body { margin-top: 22rpx; }
 .cc-stepper { display: flex; align-items: center; gap: 14rpx; }
-.cc-step { padding: 14rpx 24rpx; background: #F4F5F7; border-radius: 14rpx; font-size: 26rpx; font-weight: 700; color: #333; cursor: pointer; }
-.cc-step:active { background: #FFE8DD; color: #FF6B35; }
-.cc-input { flex: 1; height: 72rpx; text-align: center; font-size: 34rpx; font-weight: 800; color: #FF6B35; background: #FFF6F2; border-radius: 14rpx; }
-.cc-hint { display: block; font-size: 20rpx; color: #bbb; margin-top: 14rpx; }
+.cc-step { padding: 14rpx 24rpx; background: var(--bg-input); border-radius: 14rpx; font-size: 26rpx; font-weight: 700; color: var(--text-1); cursor: pointer; }
+.cc-step:active { background: rgba(255,107,53,0.15); color: #FF6B35; }
+.cc-input { flex: 1; height: 72rpx; text-align: center; font-size: 34rpx; font-weight: 800; color: #FF6B35; background: rgba(255,107,53,0.10); border-radius: 14rpx; }
+.cc-hint { display: block; font-size: 20rpx; color: var(--text-4); margin-top: 14rpx; }
 /* 饮水输入的青蓝主题色（与热量橙色区分） */
-.cc-input.water { color: #3D9BFF; background: #F0F7FF; }
+.cc-input.water { color: #3D9BFF; background: rgba(61,155,255,0.12); }
 
 /* ===== 数据备份 ===== */
 .backup-card { margin: 20rpx 24rpx; }
-.bk-desc { display: block; font-size: 22rpx; color: #999; margin-bottom: 20rpx; line-height: 1.6; }
+.bk-desc { display: block; font-size: 22rpx; color: var(--text-3); margin-bottom: 20rpx; line-height: 1.6; }
 .bk-btns { display: flex; gap: 16rpx; }
 .bk-btn { flex: 1; background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; border: none; border-radius: 18rpx; height: 84rpx; line-height: 84rpx; font-size: 28rpx; font-weight: 700; }
 .bk-btn:active { transform: scale(0.97); }

@@ -15,6 +15,7 @@ const routes = [
   { path: '/recipes', component: () => import('./pages/recipes.vue') },
   { path: '/fasting', component: () => import('./pages/fasting.vue') },
   { path: '/food-detail', component: () => import('./pages/food-detail.vue') },
+  { path: '/history', component: () => import('./pages/history.vue') },
   { path: '/profile', component: () => import('./pages/profile.vue') },
 ]
 
@@ -61,7 +62,8 @@ app.mixin({
   mounted() {
     const onLoad = this.$options.onLoad
     if (typeof onLoad === 'function') {
-      try { onLoad.call(this) } catch (e) { console.error(e) }
+      // 路由查询参数透传给 onLoad（旧实现不传，详情页永远拿不到 name）
+      try { onLoad.call(this, this.$route && this.$route.query) } catch (e) { console.error(e) }
     }
     const onShow = this.$options.onShow
     if (typeof onShow === 'function') {
@@ -81,6 +83,11 @@ app.mixin({
     const onShow = this.$options.onShow
     if (typeof onShow === 'function') {
       try { onShow.call(this) } catch (e) { console.error(e) }
+    }
+    // 同组件路由参数变化时（如详情页 A → 详情页 B）也要刷新 onLoad
+    const onLoad = this.$options.onLoad
+    if (typeof onLoad === 'function') {
+      try { onLoad.call(this, to && to.query) } catch (e) { console.error(e) }
     }
     next()
   }

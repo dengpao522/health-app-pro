@@ -260,14 +260,24 @@ function createCanvasContext(canvasId, comp) {
 // ============ Navigation (delegated to vue-router) ============
 function setRouter(r) { if (typeof window !== 'undefined') window.__uni_router = r }
 
+// uni 风格路径(/pages/X/X?k=v) → vue-router 路由对象
+// 旧实现用正则截掉最后一段时会把 ?k=v 一起截掉，导致详情页拿不到参数（食物详情页空白的根因）
+function toRoute(url) {
+  const q = url.indexOf('?');
+  const path = url.slice(0, q < 0 ? url.length : q).replace('/pages/', '/').replace(/\/[^/]+$/, '');
+  const query = {};
+  if (q >= 0) new URLSearchParams(url.slice(q + 1)).forEach((v, k) => { query[k] = v });
+  return { path, query };
+}
+
 const nav = {
   switchTab({ url }) {
     const router = (typeof window !== 'undefined') ? window.__uni_router : null
-    if (router) router.push(url.replace('/pages/', '/').replace(/\/[^/]+$/, ''))
+    if (router) router.push(toRoute(url))
   },
   navigateTo({ url }) {
     const router = (typeof window !== 'undefined') ? window.__uni_router : null
-    if (router) router.push(url.replace('/pages/', '/').replace(/\/[^/]+$/, ''))
+    if (router) router.push(toRoute(url))
   },
   navigateBack() {
     const router = (typeof window !== 'undefined') ? window.__uni_router : null
@@ -275,7 +285,7 @@ const nav = {
   },
   reLaunch({ url }) {
     const router = (typeof window !== 'undefined') ? window.__uni_router : null
-    if (router) router.replace(url.replace('/pages/', '/').replace(/\/[^/]+$/, ''))
+    if (router) router.replace(toRoute(url))
   },
 }
 

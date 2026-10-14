@@ -92,30 +92,25 @@ export default {
     planLabel() { return this.plan.label + '（断食 ' + this.plan.fastH + 'h）'; },
     isFasting() { return this.running; },
     isEating() {
-      if (!this.running) return false;
-      const elapsedH = (this.now - this.startTime) / 3600000;
+      if (!this.running || !this.startTime) return false;
+      // 周期坐标 p ∈ [0, fastH+eatH)：[0, fastH) 断食，[fastH, cycle) 进食
+      // 旧实现用 p < eatH 判断，区间错位导致进食窗口永远不落在正确时段
       const cycle = this.plan.fastH + this.plan.eatH;
-      // 超过断食窗口后进入进食窗口（按周期循环：断食→进食→断食…）
-      return elapsedH >= this.plan.fastH && (elapsedH % cycle) < this.plan.eatH;
+      const p = ((this.now - this.startTime) / 3600000) % cycle;
+      return p >= this.plan.fastH;
     },
     stateText() {
       if (!this.running) return '未开始';
       return this.isEating ? '进食窗口' : '断食中';
     },
-    // 倒计时：断食中显示距进食窗口的时间；进食中显示距断食开始的时间
+    // 倒计时：断食中显示距进食窗口的时间；进食中显示距下一轮断食的时间
+    // 用周期坐标 p 计算，第二轮循环起旧实现会算出负数归零
     countdown() {
       if (!this.running) return '--:--:--';
-      const elapsed = this.now - this.startTime;
-      const fastMs = this.plan.fastH * 3600000;
-      let remain;
-      if (this.isEating) {
-        const cycle = (this.plan.fastH + this.plan.eatH) * 3600000;
-        const inCycle = elapsed % cycle;
-        remain = this.plan.eatH * 3600000 - inCycle;
-      } else {
-        remain = fastMs - elapsed;
-      }
-      if (remain < 0) remain = 0;
+      const cycle = this.plan.fastH + this.plan.eatH;
+      const p = ((this.now - this.startTime) / 3600000) % cycle;
+      const remainH = p < this.plan.fastH ? this.plan.fastH - p : cycle - p;
+      const remain = Math.max(0, remainH * 3600000);
       const h = Math.floor(remain / 3600000);
       const m = Math.floor((remain % 3600000) / 60000);
       const s = Math.floor((remain % 60000) / 1000);
@@ -124,14 +119,18 @@ export default {
     statusTip() {
       if (!this.running) return `选好方案，点击开始；断食 ${this.plan.fastH} 小时后进入进食窗口`;
       if (this.isEating) return '现在是进食窗口，正常吃，别暴食';
-      const elapsedH = ((this.now - this.startTime) / 3600000).toFixed(1);
-      return `已断食 ${elapsedH} 小时，坚持住，可喝水/黑咖啡`;
+      // 展示本轮已断食时长（周期坐标），跨轮后不会把进食时间算进去
+      const cycle = this.plan.fastH + this.plan.eatH;
+      const p = ((this.now - this.startTime) / 3600000) % cycle;
+      return `已断食 ${p.toFixed(1)} 小时，坚持住，可喝水/黑咖啡`;
     },
   },
   onShow() {
     this.loadState();
     // 每秒刷新倒计时
     this.timer = setInterval(() => { this.now = Date.now(); this.drawRing(); }, 1000);
+    // 首帧立即画环，避免 1 秒空白
+    this.$nextTick(() => this.drawRing());
   },
   onHide() { clearInterval(this.timer); },
   onUnload() { clearInterval(this.timer); },
@@ -140,15 +139,17 @@ export default {
       try {
         const st = uni.getStorageSync(FAST_KEY) || {};
         this.planKey = st.planKey || '16:8';
-        this.running = !!st.running;
+        // startTime 丢失视为未开始，防止脏数据算出天文倒计时
+        this.running = !!st.running && !!st.startTime;
         this.startTime = st.startTime || 0;
         this.records = st.records || [];
       } catch (e) {}
     },
     saveState() {
+      // records 是 unshift(最新在前)，保留前 10 条即最新 10 条
       uni.setStorageSync(FAST_KEY, {
         planKey: this.planKey, running: this.running,
-        startTime: this.startTime, records: this.records.slice(-10),
+        startTime: this.startTime, records: this.records.slice(0, 10),
       });
     },
     choosePlan(p) {
@@ -188,12 +189,13 @@ export default {
       const w = 240, cx = 120, cy = 120, r = 96, lw = 20;
       let pct = 0;
       if (this.running) {
-        const elapsed = this.now - this.startTime;
+        // 进度环与倒计时同口径：周期坐标 p，断食中显示断食进度，进食中显示进食进度
+        const cycle = (this.plan.fastH + this.plan.eatH) * 3600000;
+        const p = (this.now - this.startTime) % cycle;
         if (this.isEating) {
-          const cycle = (this.plan.fastH + this.plan.eatH) * 3600000;
-          pct = (elapsed % cycle) / (this.plan.eatH * 3600000);
+          pct = (p - this.plan.fastH * 3600000) / (this.plan.eatH * 3600000);
         } else {
-          pct = elapsed / (this.plan.fastH * 3600000);
+          pct = p / (this.plan.fastH * 3600000);
         }
       } else {
         pct = this.plan.eatH / (this.plan.fastH + this.plan.eatH);
