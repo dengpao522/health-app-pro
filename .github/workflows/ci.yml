@@ -1,0 +1,35 @@
+# CI：push/PR 自动跑测试 + 构建验证
+# 测试为 Node 原生 test runner，零外部依赖，任何 Node 18+ 版本可跑
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]   # 覆盖常见 LTS，验证兼容性
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 使用 Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: 安装依赖
+        working-directory: desktop-src
+        run: npm ci
+
+      - name: 运行测试（评分引擎/断食周期/健康公式/mock接口）
+        working-directory: desktop-src
+        run: npm test
+
+      - name: 构建验证（Vite 产物完整性）
+        working-directory: desktop-src
+        run: npm run build
