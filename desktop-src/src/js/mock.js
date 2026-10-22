@@ -50,14 +50,21 @@ function saveDB(db) {
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
   } catch (e) {
-    // 配额溢出：清理旧餐食数据（保留最近 30 天），再试
+    // 配额溢出：分级清理（先旧餐食，再旧运动/饮水），保留最近 30 天
     if (e.name === 'QuotaExceededError' || e.code === 22) {
       console.warn('[mock] localStorage 配额溢出，清理旧数据...');
+      const cutoff = dateOffset(30);
       for (const uid of Object.keys(db.meals || {})) {
-        const cutoff = dateOffset(30);
         db.meals[uid] = (db.meals[uid] || []).filter(m => m.date >= cutoff);
       }
-      try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (e2) { console.error('[mock] 清理后仍溢出', e2); }
+      try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return; } catch (e2) {}
+      // 仍溢出：清理运动/饮水/体重旧记录（睡眠/生理期数据量小且价值高，不动）
+      try {
+        for (const uid of Object.keys(db.exercises || {})) db.exercises[uid] = (db.exercises[uid] || []).filter(x => x.date >= cutoff);
+        for (const uid of Object.keys(db.waters || {})) db.waters[uid] = (db.waters[uid] || []).filter(x => x.date >= cutoff);
+        for (const uid of Object.keys(db.weights || {})) db.weights[uid] = (db.weights[uid] || []).filter(x => x.date >= cutoff);
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+      } catch (e3) { console.error('[mock] 清理后仍溢出', e3); }
     } else { throw e; }
   }
 }
@@ -369,11 +376,20 @@ export function mockRequest(method, url, data) {
   
   // 获取/更新用户
   if (url === '/api/me') {
-    if (method === 'GET') return { ...userFromDB(user), ...calcTargets(user) };
+    if (method === 'GET') {
+      // 不回传密码字段（前端用不到，暴露无益）
+      const { password, ...safe } = userFromDB(user);
+      return { ...safe, ...calcTargets(user) };
+    }
     if (method === 'PUT') {
-      Object.assign(user, data);
+      // 白名单过滤：只允许更新身体数据与目标字段，防止 id/password/username 被任意覆盖（越权漏洞）
+      const ALLOWED = ['height', 'weight', 'age', 'gender', 'activity_level', 'goal', 'custom_calories', 'custom_water', 'nickname', 'target_weight', 'avatar'];
+      const patch = {};
+      for (const k of ALLOWED) if (k in data) patch[k] = data[k];
+      Object.assign(user, patch);
       db.users[uid] = user; saveDB(db);
-      return { ...userFromDB(user), ...calcTargets(user) };
+      const { password, ...safe } = userFromDB(user);
+      return { ...safe, ...calcTargets(user) };
     }
   }
   
@@ -418,6 +434,7 @@ export function mockRequest(method, url, data) {
   const mealDel = url.match(/^\/api\/meals\/(\d+)$/);
   if (mealDel && method === 'DELETE') {
     if (db.meals[uid]) {
+      // 属主校验：只删除当前用户自己的记录（防跨用户越权）
       db.meals[uid] = db.meals[uid].filter(m => m.id !== parseInt(mealDel[1]));
       saveDB(db);
     }
@@ -428,6 +445,7 @@ export function mockRequest(method, url, data) {
   const mealEdit = url.match(/^\/api\/meals\/(\d+)$/);
   if (mealEdit && method === 'PUT') {
     if (!db.meals[uid]) return { __status: 404, detail: 'Not found' };
+    // 属主校验：只允许编辑当前用户自己的记录
     const meal = db.meals[uid].find(m => m.id === parseInt(mealEdit[1]));
     if (!meal) return { __status: 404, detail: 'Not found' };
     const newServing = Math.max(1, Math.min(2000, +data.serving_size || meal.serving_size));
@@ -745,6 +763,7 @@ export function mockRequest(method, url, data) {
   const exDel = url.match(/^\/api\/exercises\/(\d+)$/);
   if (exDel && method === 'DELETE') {
     if (db.exercises[uid]) {
+      // 属主校验：只删除当前用户自己的运动记录
       db.exercises[uid] = db.exercises[uid].filter(e => e.id !== parseInt(exDel[1]));
       saveDB(db);
     }

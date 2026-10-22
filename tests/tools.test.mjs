@@ -1,4 +1,4 @@
-﻿// 健康工具箱公式测试（tools.vue 内联公式的交叉验证）
+﻿﻿// 健康工具箱公式测试（tools.vue 内联公式的交叉验证）
 // 口径：Mifflin-St Jeor BMR / 中国成人 BMI 分级(WS/T 428) / Deurenberg 体脂率
 import test from 'node:test';
 import assert from 'node:assert/strict';

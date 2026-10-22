@@ -1,4 +1,4 @@
-﻿// mock 数据层全接口冒烟测试
+﻿﻿// mock 数据层全接口冒烟测试
 // 覆盖：登录鉴权 / 记录 CRUD / 统计口径 / 睡眠换算 / 生理期周期 / 打卡日历 / 社区互动 / 数据备份
 // 方式：stub 全局 localStorage 后直接调 mockRequest（纯前端数据层，无需浏览器）
 import test from 'node:test';

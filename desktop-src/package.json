@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test ../tests/food-db.test.mjs ../tests/fasting.test.mjs ../tests/tools.test.mjs ../tests/mock-api.test.mjs"
+    "test": "node --test ../tests/food-db.test.mjs ../tests/fasting.test.mjs ../tests/tools.test.mjs ../tests/mock-api.test.mjs ../tests/security.test.mjs"
   },
   "dependencies": {
     "vue": "^3.4.0",

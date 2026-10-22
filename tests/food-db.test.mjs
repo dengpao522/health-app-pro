@@ -1,4 +1,4 @@
-﻿// 食物健康度评分引擎测试
+﻿﻿// 食物健康度评分引擎测试
 // 验证点：分类模板分度正确、双向线性计分、糖水一票定性、坚果高钠惩罚
 import test from 'node:test';
 import assert from 'node:assert/strict';
