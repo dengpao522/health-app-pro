@@ -18,7 +18,7 @@
 # 1) 启动 Web 预览（无需任何后端）
 cd desktop-src
 npm install
-npm run dev        # 浏览器打开，演示账号 demo / 123456
+npm run dev        # 浏览器打开，点「一键体验」免注册进入（含演示数据）
 
 # 2) 构建 + 电脑预览（仓库根目录）
 cd ..

@@ -1,4 +1,4 @@
-﻿﻿// mock 数据层全接口冒烟测试
+﻿﻿﻿﻿// mock 数据层全接口冒烟测试
 // 覆盖：登录鉴权 / 记录 CRUD / 统计口径 / 睡眠换算 / 生理期周期 / 打卡日历 / 社区互动 / 数据备份
 // 方式：stub 全局 localStorage 后直接调 mockRequest（纯前端数据层，无需浏览器）
 import test from 'node:test';
@@ -22,17 +22,20 @@ const { recommendSmart } = await import('../desktop-src/src/js/recipes.js');
 // 每个用例独立数据库（避免用例间污染）
 function freshDB() {
   store.clear();
-  const r = mockRequest('POST', '/login/', { username: 'demo', password: '123456' });
-  assert.ok(r.access_token, 'demo 登录应成功');
+  // 一键体验方式建库：随机凭据演示账号（与线上登录页同一条路径）
+  const r = mockRequest('POST', '/api/demo-account', {});
+  assert.ok(r.access_token, '体验账号应创建成功');
 }
 const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-test('鉴权：错误密码拒绝，未登录返回401', () => {
+test('鉴权：错误密码拒绝，未登录返回401，已知旧凭据已禁用', () => {
   store.clear();
   assert.equal(mockRequest('POST', '/login/', { username: 'demo', password: 'wrong' }).__status, 400);
+  // 安全整改回归：demo/123456 硬编码凭据必须已失效（老库升级会随机化其密码）
+  assert.equal(mockRequest('POST', '/login/', { username: 'demo', password: '123456' }).__status, 400, '旧硬编码凭据应已禁用');
   assert.equal(mockRequest('GET', '/api/stats/today', {}).__status, 401);
 });
 
@@ -128,9 +131,9 @@ test('数据备份：导出包含全部表，导入后数据一致且登出', ()
   mockRequest('POST', '/api/sleep', { bedtime: '23:00', waketime: '07:00' });
   const backup = mockRequest('GET', '/api/data/export', {});
   assert.ok(backup.data.users && backup.data.meals && backup.data.sleeps, '导出应含用户/餐食/睡眠表');
-  // 换一个全新库导入
+  // 换一个全新库导入（用一个普通账号占位，保证导入目标库结构完整）
   store.clear();
-  mockRequest('POST', '/login/', { username: 'demo', password: '123456' });
+  mockRequest('POST', '/api/demo-account', {});
   const r = mockRequest('POST', '/api/data/import', backup);
   assert.equal(r.message, '导入成功，请重新登录');
   assert.equal(mockRequest('GET', '/api/stats/today', {}).__status, 401, '导入后应登出防串号');

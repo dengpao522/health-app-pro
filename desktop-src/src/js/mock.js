@@ -38,11 +38,16 @@ function loadDB() {
   // 旧版本库升级：补社区互动表（点赞/评论）
   if (!db.likes) { db.likes = {}; changed = true; }
   if (!db.comments) { db.comments = {}; changed = true; }
-  // 老用户升级到新版时也补上演示账号（demo / 123456），不影响其已有账号
-  if (!Object.values(db.users).some(u => u.username === 'demo')) {
-    seedDemo(db);
-    changed = true;
+  // 历史库升级：给旧版注入过固定密码演示账号的老库，移除硬编码凭据（安全整改）
+  for (const u of Object.values(db.users)) {
+    if (u.username === 'demo' && u.password === '123456') {
+      // 保留该账号的演示数据，但密码改为随机值（等效禁用已知凭据登录）
+      u.password = 'legacy-' + Math.random().toString(36).slice(2, 14);
+      changed = true;
+    }
   }
+  // 老库升级不再预置演示账号：体验入口改为按需生成（见 /api/demo-account），
+  // 避免代码中出现已知固定凭据（demo/123456 曾被硬编码，属于安全隐患）
   if (changed) saveDB(db);
   return db;
 }
@@ -69,15 +74,9 @@ function saveDB(db) {
   }
 }
 
-// 预置演示数据（demo / 123456），让趋势图等页面开箱即用
-function seedDemo(db) {
-  const uid = db.users[1] ? Date.now() : 1;
-  const demoUser = {
-    id: uid, username: 'demo', password: '123456', email: '',
-    nickname: '演示用户', gender: 'male', age: 25, height: 175, weight: 70,
-    activity_level: 'light', goal: 'maintain', avatar: '',
-  };
-  db.users[uid] = demoUser;
+// 为指定账号注入 7 天演示数据（趋势图/打卡日历开箱即用）
+// uid 由调用方传入（一键体验接口生成的账号），本函数只负责灌数据
+function seedDemo(db, uid) {
   if (!db.meals) db.meals = {};
   if (!db.waters) db.waters = {};
   if (!db.weights) db.weights = {};
@@ -365,6 +364,23 @@ export function mockRequest(method, url, data) {
       activity_level: 'light', goal: 'maintain', avatar: '',
     };
     db.users[id] = u; db.currentUser = id; saveDB(db);
+    return { access_token: genToken(u), user: { ...userFromDB(u), ...calcTargets(u) }, targets: calcTargets(u) };
+  }
+
+  // 一键体验：生成随机凭据的演示账号并注入演示数据，直接返回登录态
+  // 设计动机：体验凭据不再硬编码进代码（demo/123456 属安全隐患），且用户无需感知密码
+  if (method === 'POST' && url === '/api/demo-account') {
+    const uname = 'guest_' + Math.random().toString(36).slice(2, 8);
+    const u = {
+      id: Date.now(), username: uname,
+      // 随机密码：不回传不落明文文案，仅存在于本机库中（该账号本就不面向密码登录）
+      password: 'g-' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10),
+      email: '', nickname: '体验用户', gender: 'male', age: 25, height: 175, weight: 70,
+      activity_level: 'light', goal: 'maintain', avatar: '',
+    };
+    db.users[u.id] = u; db.currentUser = u.id;
+    seedDemo(db, u.id);   // 为体验账号注入 7 天演示数据（趋势/日历开箱即用）
+    saveDB(db);
     return { access_token: genToken(u), user: { ...userFromDB(u), ...calcTargets(u) }, targets: calcTargets(u) };
   }
   

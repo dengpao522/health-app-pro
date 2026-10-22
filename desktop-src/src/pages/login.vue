@@ -22,8 +22,12 @@
       <view class="link-row">
         <a class="link" href="#/register" @click="toRegister">还没账号？立即注册</a>
       </view>
+      <!-- 一键体验：生成随机凭据的演示账号（凭据不硬编码进代码，历史 demo/123456 已废弃） -->
+      <button class="guest-btn" :disabled="guestLoading" @click="guestLogin">
+        {{ guestLoading ? '准备演示数据中...' : '🚀 一键体验（免注册）' }}
+      </button>
     </view>
-    <text class="tip">演示账号 demo / 123456 · 数据仅保存在本机</text>
+    <text class="tip">数据仅保存在本机 · 可在「我的」页导出备份</text>
   </view>
 </template>
 
@@ -31,7 +35,7 @@
 import { request } from '../js/request.js';
 export default {
   data() {
-    return { form: { username: '', password: '' } };
+    return { form: { username: '', password: '' }, guestLoading: false };
   },
   onLoad() {
     // 已登录直接进首页
@@ -56,6 +60,21 @@ export default {
       } finally {
         // 无论成功失败必须关闭 loading，否则遮罩会锁死整个页面
         uni.hideLoading();
+      }
+    },
+    // 一键体验：服务端生成随机凭据的演示账号（含 7 天演示数据），前端只拿登录态
+    async guestLogin() {
+      if (this.guestLoading) return;
+      this.guestLoading = true;
+      try {
+        const res = await request({ url: '/api/demo-account', method: 'POST', data: {} });
+        uni.setStorageSync('userInfo', res);
+        uni.showToast({ title: '欢迎体验！', icon: 'success' });
+        setTimeout(() => uni.switchTab({ url: '/pages/home/home' }), 600);
+      } catch (e) {
+        uni.showToast({ title: '体验入口异常，请重试', icon: 'none' });
+      } finally {
+        this.guestLoading = false;
       }
     },
     toRegister(e) {
@@ -84,6 +103,9 @@ export default {
 .input-box input { flex: 1; font-size: 30rpx; }
 .icon { font-size: 36rpx; margin-right: 20rpx; }
 .btn { background: linear-gradient(135deg, #FF7A45, #FF5E3A); color: #fff; border: none; border-radius: 24rpx; height: 96rpx; line-height: 96rpx; font-size: 34rpx; font-weight: 700; margin-top: 12rpx; box-shadow: 0 10rpx 26rpx rgba(255,94,58,0.35); }
+/* 一键体验：描边幽灵按钮，弱于主按钮的视觉层级 */
+.guest-btn { background: transparent; color: #FF6B35; border: 2rpx solid #FFB088; border-radius: 24rpx; height: 84rpx; line-height: 80rpx; font-size: 28rpx; font-weight: 600; margin-top: 20rpx; }
+.guest-btn[disabled] { opacity: 0.6; color: #FF6B35; background: transparent; }
 .btn:active { transform: scale(0.98); }
 .link-row { text-align: center; margin-top: 34rpx; color: #999; font-size: 26rpx; }
 .link { color: #FF6B35; font-size: 26rpx; font-weight: 600; text-decoration: underline; cursor: pointer; }

@@ -13,19 +13,21 @@ const { mockRequest } = await import('../desktop-src/src/js/mock.js');
 
 function freshDB() {
   store.clear();
-  const r = mockRequest('POST', '/login/', { username: 'demo', password: '123456' });
-  assert.ok(r.access_token, 'demo 登录应成功');
+  // 一键体验方式建库：随机凭据演示账号（与线上登录页同一条路径）
+  const r = mockRequest('POST', '/api/demo-account', {});
+  assert.ok(r.access_token, '体验账号应创建成功');
 }
 
 test('PUT /api/me 白名单：恶意覆盖 id/password/username 必须被拒绝', () => {
   freshDB();
   mockRequest('PUT', '/api/me', { id: 999, password: 'hacked', username: 'evil' });
-  // 密码未被篡改（旧密码仍能登录）
-  store.clear();
-  const relogin = mockRequest('POST', '/login/', { username: 'demo', password: '123456' });
-  assert.ok(relogin.access_token, '原密码仍应能登录（密码未被覆盖）');
-  // 用户名未被篡改
-  assert.ok(Object.values(relogin.user ? {} : {}).length === 0); // 占位，登录返回即含 user
+  // 直查库验证：id 与用户名未被覆盖（白名单外字段一律丢弃）
+  const backup = mockRequest('GET', '/api/data/export', {});
+  const uid = backup.data.currentUser;
+  const u = backup.data.users[uid];
+  assert.notEqual(String(u.id), '999', 'id 不应被覆盖');
+  assert.equal(u.username.startsWith('guest_'), true, '用户名不应被覆盖为 evil');
+  assert.notEqual(u.password, 'hacked', '密码不应被覆盖');
 });
 
 test('GET /api/me 不回传 password 字段', () => {
@@ -63,7 +65,7 @@ test('配额分级清理：只清 30 天前数据，近期数据保留', () => {
   // 直接构造库验证 saveDB 清理逻辑的行为边界（通过公开导入接口注入）
   const backup = mockRequest('GET', '/api/data/export', {});
   backup.data.meals = backup.data.meals || {};
-  const uid = Object.keys(backup.data.users).find(k => backup.data.users[k].username === 'demo');
+  const uid = Object.keys(backup.data.users).find(k => String(k) === String(backup.data.currentUser));
   backup.data.meals[uid] = [
     { id: 1, date: fmt(old), food_name: '旧餐', meal_type: 'lunch', calories: 500 },
     { id: 2, date: fmt(today), food_name: '新餐', meal_type: 'lunch', calories: 300 },
